@@ -1,0 +1,62 @@
+cabal-version:       2.2
+name:                ihp-oauth-microsoft
+version:             0.0.1
+synopsis:            ihp-oauth-microsoft
+description:         Login with Microsoft Entra ID using OpenID Connect
+license:             MIT
+author:              digitally induced GmbH
+maintainer:          support@digitallyinduced.com
+build-type:          Simple
+
+library
+    build-depends:
+        ihp
+        , aeson
+        , base
+        , bytestring
+        , hasql-implicits
+        , transformers
+        , typerep-map
+        , uri-encode
+        , wreq
+        , lens
+        , text
+    default-extensions:
+        OverloadedStrings
+        , NoImplicitPrelude
+        , ImplicitParams
+        , Rank2Types
+        , NamedFieldPuns
+        , TypeSynonymInstances
+        , FlexibleInstances
+        , DisambiguateRecordFields
+        , DuplicateRecordFields
+        , OverloadedLabels
+        , FlexibleContexts
+        , DataKinds
+        , QuasiQuotes
+        , TypeFamilies
+        , PackageImports
+        , ScopedTypeVariables
+        , RecordWildCards
+        , TypeApplications
+        , DataKinds
+        , InstanceSigs
+        , DeriveGeneric
+        , MultiParamTypeClasses
+        , TypeOperators
+        , DeriveDataTypeable
+        , DefaultSignatures
+        , BangPatterns
+        , FunctionalDependencies
+        , PartialTypeSignatures
+        , BlockArguments
+        , LambdaCase
+        , StandaloneDeriving
+        , OverloadedRecordDot
+    hs-source-dirs: .
+    exposed-modules:
+        IHP.OAuth.Microsoft.Config
+        , IHP.OAuth.Microsoft.Controller
+        , IHP.OAuth.Microsoft.MicrosoftApi
+        , IHP.OAuth.Microsoft.Types

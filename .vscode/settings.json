@@ -1,0 +1,18 @@
+{
+  "nixEnvSelector.nixFile": "${workspaceFolder}/default.nix",
+  "[haskell]": {
+    "editor.formatOnSave": false,
+    "editor.occurrencesHighlight": "off"
+  },
+  "runOnSave.commands": [
+    {
+      "match": "\\.(hs|hs-boot)$",
+      "command": "./scripts/format-haskell.sh",
+      "args": [
+        "${file}"
+      ],
+      "async": false,
+      "workingDirectoryAsCWD": true
+    }
+  ]
+}

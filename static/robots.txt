@@ -1,0 +1,11 @@
+User-agent: *
+Allow: /
+
+# Private or app-only areas
+Disallow: /Dashboard
+Disallow: /NewSession
+Disallow: /Users
+
+# Sitemap
+Sitemap: /sitemap.xml
+

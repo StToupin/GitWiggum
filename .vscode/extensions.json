@@ -1,0 +1,9 @@
+{
+	"recommendations": [
+		"haskell.haskell",
+		"arrterian.nix-env-selector",
+		"jnoortheen.nix-ide",
+		"justusadam.language-haskell",
+		"pucelle.run-on-save"
+	]
+}
