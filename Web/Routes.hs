@@ -50,6 +50,7 @@ instance AutoRoute PullRequestsController where
         newPullRequestRoute
             <|> createPullRequestRoute
             <|> showPullRequestConversationRoute
+            <|> showPullRequestCommitsRoute
       where
         newPullRequestRoute = do
             string "/"
@@ -83,12 +84,26 @@ instance AutoRoute PullRequestsController where
             onlyAllowMethods [GET, HEAD]
             pure ShowPullRequestConversationAction { ownerSlug, repositoryName, pullRequestNumber }
 
+        showPullRequestCommitsRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/pull-requests/"
+            pullRequestNumber <- parseRouteNumber
+            string "/commits"
+            endOfInput
+            onlyAllowMethods [GET, HEAD]
+            pure ShowPullRequestCommitsAction { ownerSlug, repositoryName, pullRequestNumber }
+
     customPathTo NewPullRequestAction { ownerSlug, repositoryName } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/new")
     customPathTo CreatePullRequestAction { ownerSlug, repositoryName } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/new")
     customPathTo ShowPullRequestConversationAction { ownerSlug, repositoryName, pullRequestNumber } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/conversation")
+    customPathTo ShowPullRequestCommitsAction { ownerSlug, repositoryName, pullRequestNumber } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/commits")
     customPathTo _ = Nothing
 
 instance AutoRoute RepositoriesController where

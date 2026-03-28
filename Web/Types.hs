@@ -51,6 +51,7 @@ data PullRequestsController
     = NewPullRequestAction { ownerSlug :: !Text, repositoryName :: !Text }
     | CreatePullRequestAction { ownerSlug :: !Text, repositoryName :: !Text }
     | ShowPullRequestConversationAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
+    | ShowPullRequestCommitsAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
     deriving (Eq, Show, Data)
 
 data RepositoriesController

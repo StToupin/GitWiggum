@@ -2,10 +2,12 @@ module Application.Service.GitRepository
     ( GitHttpRequest (..)
     , GitTreeEntry (..)
     , GitCommitContext (..)
+    , GitPullRequestCommit (..)
     , GitTreeEntryType (..)
     , cleanupRepositoryOnDisk
     , enableHttpReceivePackOnDisk
     , initializeRepositoryOnDisk
+    , listPullRequestCommits
     , listRepositoryBranches
     , listRepositoryTree
     , readLatestCommitContext
@@ -80,6 +82,12 @@ data GitCommitContext = GitCommitContext
     }
     deriving (Eq, Show)
 
+data GitPullRequestCommit = GitPullRequestCommit
+    { commitSha :: Text
+    , commitSubject :: Text
+    }
+    deriving (Eq, Show)
+
 initializeRepositoryOnDisk :: User -> Repository -> IO Text
 initializeRepositoryOnDisk owner repository = do
     barePath <- repositoryBarePath owner repository
@@ -147,6 +155,24 @@ listRepositoryBranches owner repository = do
             |> filter (not . Text.null)
             |> List.sort
 
+listPullRequestCommits :: User -> Repository -> Text -> Text -> IO [GitPullRequestCommit]
+listPullRequestCommits owner repository baseBranch compareBranch = do
+    commits <-
+        readGitOutputMaybe
+            owner
+            repository
+            [ "log"
+            , "--reverse"
+            , "--format=%H%x09%s"
+            , cs (branchRef baseBranch <> ".." <> branchRef compareBranch)
+            ]
+
+    pure $
+        commits
+            |> fromMaybe ""
+            |> Text.lines
+            |> mapMaybe parsePullRequestCommit
+
 listRepositoryTree :: User -> Repository -> Text -> Text -> IO [GitTreeEntry]
 listRepositoryTree owner repository branchName currentPath = do
     let treeReference =
@@ -205,6 +231,12 @@ readGitOutputMaybe owner repository args = do
         case exitCode of
             ExitSuccess -> Just (cs stdout)
             ExitFailure _ -> Nothing
+
+readMergeBase :: User -> Repository -> Text -> Text -> IO (Maybe Text)
+readMergeBase owner repository baseBranch compareBranch =
+    fmap
+        (fmap Text.strip)
+        (readGitOutputMaybe owner repository ["merge-base", cs (branchRef baseBranch), cs (branchRef compareBranch)])
 
 runGit :: Maybe FilePath -> [String] -> IO Text
 runGit workingDirectory args = do
@@ -384,6 +416,21 @@ parseCommitContext :: Text -> Maybe GitCommitContext
 parseCommitContext line = do
     (sha, message) <- splitTreeLine line
     pure GitCommitContext { commitSha = sha, commitMessage = message }
+
+parsePullRequestCommit :: Text -> Maybe GitPullRequestCommit
+parsePullRequestCommit rawLine =
+    case Text.breakOn "\t" rawLine of
+        (commitSha', commitSubject')
+            | Text.null commitSha' -> Nothing
+            | otherwise ->
+                Just
+                    GitPullRequestCommit
+                        { commitSha = Text.strip commitSha'
+                        , commitSubject = Text.strip (Text.drop 1 commitSubject')
+                        }
+
+branchRef :: Text -> Text
+branchRef branchName = "refs/heads/" <> branchName
 
 joinTreePath :: Text -> Text -> Text
 joinTreePath currentPath entryName =
