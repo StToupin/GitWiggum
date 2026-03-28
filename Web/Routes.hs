@@ -12,8 +12,31 @@ instance AutoRoute PasswordResetsController
 instance AutoRoute DashboardController
 
 instance AutoRoute RepositoriesController where
-    customRoutes = showRepositoryRoute
+    customRoutes =
+        repositoryPullRequestsRoute
+            <|> repositoryAgentsRoute
+            <|> showRepositoryRoute
       where
+        repositoryPullRequestsRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/pull-requests"
+            endOfInput
+            onlyAllowMethods [GET, HEAD]
+            pure RepositoryPullRequestsAction { ownerSlug, repositoryName }
+
+        repositoryAgentsRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/agents"
+            endOfInput
+            onlyAllowMethods [GET, HEAD]
+            pure RepositoryAgentsAction { ownerSlug, repositoryName }
+
         showRepositoryRoute = do
             string "/"
             ownerSlug <- parseText
@@ -25,4 +48,8 @@ instance AutoRoute RepositoriesController where
 
     customPathTo ShowRepositoryAction { ownerSlug, repositoryName } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName)
+    customPathTo RepositoryPullRequestsAction { ownerSlug, repositoryName } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests")
+    customPathTo RepositoryAgentsAction { ownerSlug, repositoryName } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/agents")
     customPathTo _ = Nothing
