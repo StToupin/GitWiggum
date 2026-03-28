@@ -12,6 +12,20 @@ instance AutoRoute SessionsController
 instance AutoRoute PasswordResetsController
 instance AutoRoute DashboardController
 
+instance AutoRoute GitHttpController where
+    customRoutes = do
+        onlyAllowMethods [GET, HEAD, POST]
+        string "/"
+        ownerSlug <- parseText
+        string "/"
+        repositorySegment <- parseText
+        gitPathInfo <- remainingText
+        repositoryName <- parseGitHttpRepositorySegment repositorySegment
+        pure RepositoryGitHttpAction { ownerSlug, repositoryName, gitPathInfo }
+
+    customPathTo RepositoryGitHttpAction { ownerSlug, repositoryName, gitPathInfo } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> ".git" <> gitPathInfo)
+
 instance AutoRoute RepositoriesController where
     customRoutes =
         repositoryPullRequestsRoute
@@ -75,6 +89,13 @@ instance AutoRoute RepositoriesController where
     customPathTo RepositoryAgentsAction { ownerSlug, repositoryName } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/agents")
     customPathTo _ = Nothing
+
+parseGitHttpRepositorySegment :: Text -> Parser Text
+parseGitHttpRepositorySegment repositorySegment =
+    let suffix = ".git"
+     in if suffix `Text.isSuffixOf` repositorySegment
+            then pure (Text.dropEnd (Text.length suffix) repositorySegment)
+            else empty
 
 treePathSuffix :: Text -> Text
 treePathSuffix treePath =
