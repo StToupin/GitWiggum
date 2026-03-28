@@ -51,6 +51,8 @@ instance AutoRoute PullRequestsController where
             <|> createPullRequestRoute
             <|> showPullRequestConversationRoute
             <|> showPullRequestCommitsRoute
+            <|> showPullRequestFilesRoute
+            <|> createPullRequestDiffAiJobRoute
       where
         newPullRequestRoute = do
             string "/"
@@ -96,6 +98,30 @@ instance AutoRoute PullRequestsController where
             onlyAllowMethods [GET, HEAD]
             pure ShowPullRequestCommitsAction { ownerSlug, repositoryName, pullRequestNumber }
 
+        showPullRequestFilesRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/pull-requests/"
+            pullRequestNumber <- parseRouteNumber
+            string "/files"
+            endOfInput
+            onlyAllowMethods [GET, HEAD]
+            pure ShowPullRequestFilesAction { ownerSlug, repositoryName, pullRequestNumber }
+
+        createPullRequestDiffAiJobRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/pull-requests/"
+            pullRequestNumber <- parseRouteNumber
+            string "/diff-ai"
+            endOfInput
+            onlyAllowMethods [POST]
+            pure CreatePullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber }
+
     customPathTo NewPullRequestAction { ownerSlug, repositoryName } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/new")
     customPathTo CreatePullRequestAction { ownerSlug, repositoryName } =
@@ -104,6 +130,10 @@ instance AutoRoute PullRequestsController where
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/conversation")
     customPathTo ShowPullRequestCommitsAction { ownerSlug, repositoryName, pullRequestNumber } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/commits")
+    customPathTo ShowPullRequestFilesAction { ownerSlug, repositoryName, pullRequestNumber } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/files")
+    customPathTo CreatePullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/diff-ai")
     customPathTo _ = Nothing
 
 instance AutoRoute RepositoriesController where
