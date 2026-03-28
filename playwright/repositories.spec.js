@@ -70,3 +70,26 @@ test('dashboard list shows visible repositories and create repository CTA', asyn
   await expect(page.getByText('Seeded dashboard repository')).toBeVisible();
   await expect(page.getByText('Public')).toBeVisible();
 });
+
+test('create repository redirects to the canonical owner route', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const email = `repo-create-${suffix}@example.com`;
+  const username = `repo-create-${suffix}`;
+  const repositoryName = `project-${suffix}`;
+
+  await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
+
+  await page.getByRole('link', { name: 'Create repository' }).click();
+  await page.getByLabel('Repository name').fill(repositoryName);
+  await page.getByLabel('Description').fill('Canonical repository route smoke test');
+  await page.locator('input[name="visibility"][value="private"]').check();
+  await page.getByRole('button', { name: 'Create repository' }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}$`));
+  await expect(page.getByRole('heading', { name: `${username}/${repositoryName}` })).toBeVisible();
+  await expect(page.getByText('Canonical repository route smoke test')).toBeVisible();
+  await expect(page.getByText('Private')).toBeVisible();
+
+  await page.goto('/Dashboard');
+  await expect(page.getByText(repositoryName)).toBeVisible();
+});

@@ -74,10 +74,23 @@ renderRepositoryPanel repositories = [hsx|
 |]
 
 renderRepositoryCard :: Repository -> Html
-renderRepositoryCard repository = [hsx|
+renderRepositoryCard repository =
+    let repositoryPath =
+            pathTo
+                ShowRepositoryAction
+                    { ownerSlug = personalOwnerSlug currentUser
+                    , repositoryName = get #name repository
+                    }
+     in [hsx|
     <div class="border rounded-3 p-3">
         <div class="d-flex align-items-center justify-content-between gap-3 mb-2">
-            <div class="fw-semibold">{get #name repository}</div>
+            <a
+                class="fw-semibold text-decoration-none"
+                href={repositoryPath}
+                data-posthog-id="dashboard-repository-link"
+            >
+                {get #name repository}
+            </a>
             <span class="badge rounded-pill text-bg-light">{visibilityLabel repository}</span>
         </div>
         <div class="text-secondary small mb-0">
