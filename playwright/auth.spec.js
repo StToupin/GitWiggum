@@ -223,3 +223,35 @@ test('password reset completion updates the password and invalidates the token',
   await page.goto(resetUrl);
   await expect(page.getByText('This password reset link is invalid or expired.')).toBeVisible();
 });
+
+test('personal owner namespace comes from the account username', async ({ page }) => {
+  await clearMailhogMessages();
+
+  const suffix = `${Date.now().toString(36)}-owner`;
+  const email = `auth-${suffix}@example.com`;
+  const username = `owner-${suffix}`;
+
+  await page.goto('/NewRegistration');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password').fill('secret123');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByText('Account created. Confirm your email before signing in.')).toBeVisible();
+
+  const confirmationMessage = await waitForMailhogMessage({
+    to: email,
+    subjectIncludes: 'Confirm your GitWiggum account',
+  });
+  const confirmationUrl = extractFirstUrl(decodeQuotedPrintable(confirmationMessage.Content?.Body || ''));
+
+  expect(confirmationUrl).toBeTruthy();
+
+  await page.goto(confirmationUrl);
+  await page.goto('/NewSession');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill('secret123');
+  await page.getByRole('button', { name: 'Sign in' }).click();
+
+  await expect(page.getByText('Personal owner namespace')).toBeVisible();
+  await expect(page.getByText(`/${username}`).first()).toBeVisible();
+});

@@ -19,12 +19,31 @@ instance View IndexView where
                     </a>
                 </div>
 
-                <div class="card shadow-sm border-0 bg-body-tertiary">
-                    <div class="card-body p-4">
-                        <h2 class="h5 mb-2">No repositories yet</h2>
-                        <p class="text-secondary mb-0">
-                            Account auth is live. Repository creation is the next slice.
-                        </p>
+                <div class="row g-4">
+                    <div class="col-12 col-lg-5">
+                        <div class="card shadow-sm border-0">
+                            <div class="card-body p-4">
+                                <div class="text-uppercase small fw-semibold text-secondary mb-2">Personal owner namespace</div>
+                                <div class="fs-4 fw-semibold mb-2">
+                                    <code>{ownerNamespacePath currentUser}</code>
+                                </div>
+                                <p class="text-secondary mb-0">
+                                    Repository creation will default to this owner slug, so canonical routes can start at
+                                    <code class="ms-1">{ownerNamespacePath currentUser}</code>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-12 col-lg-7">
+                        <div class="card shadow-sm border-0 bg-body-tertiary h-100">
+                            <div class="card-body p-4">
+                                <h2 class="h5 mb-2">No repositories yet</h2>
+                                <p class="text-secondary mb-0">
+                                    Your namespace is ready. Repository creation is the next slice.
+                                </p>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
