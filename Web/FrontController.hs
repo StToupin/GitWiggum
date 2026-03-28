@@ -10,6 +10,7 @@ import Web.Controller.Static
 import Web.Controller.Confirmations
 import Web.Controller.Registrations
 import Web.Controller.Sessions
+import Web.Controller.PasswordResets
 import Web.Controller.Dashboard
 
 instance FrontController WebApplication where
@@ -19,6 +20,7 @@ instance FrontController WebApplication where
         , parseRoute @RegistrationsController
         , parseRoute @ConfirmationsController
         , parseRoute @SessionsController
+        , parseRoute @PasswordResetsController
         , parseRoute @DashboardController
         -- Generator Marker
         ]

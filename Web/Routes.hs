@@ -8,4 +8,5 @@ instance AutoRoute StaticController
 instance AutoRoute RegistrationsController
 instance AutoRoute ConfirmationsController
 instance AutoRoute SessionsController
+instance AutoRoute PasswordResetsController
 instance AutoRoute DashboardController

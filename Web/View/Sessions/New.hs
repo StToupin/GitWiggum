@@ -48,6 +48,12 @@ instance View NewView where
                                 Sign in
                             </button>
                         </form>
+
+                        <div class="mt-4 text-center">
+                            <a href={pathTo NewPasswordResetAction} class="text-decoration-none" data-posthog-id="session-forgot-password">
+                                Forgot your password?
+                            </a>
+                        </div>
                     </div>
                 </div>
             </div>

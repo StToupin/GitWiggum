@@ -27,6 +27,11 @@ data SessionsController
     | LogoutAction
     deriving (Eq, Show, Data)
 
+data PasswordResetsController
+    = NewPasswordResetAction
+    | CreatePasswordResetAction
+    deriving (Eq, Show, Data)
+
 data DashboardController
     = DashboardAction
     deriving (Eq, Show, Data)
