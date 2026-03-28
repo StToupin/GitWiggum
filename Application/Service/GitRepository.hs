@@ -1,11 +1,14 @@
 module Application.Service.GitRepository
     ( GitTreeEntry (..)
+    , GitCommitContext (..)
     , GitTreeEntryType (..)
     , cleanupRepositoryOnDisk
     , initializeRepositoryOnDisk
     , listRepositoryBranches
     , listRepositoryTree
+    , readLatestCommitContext
     , readRepositoryFile
+    , readRepositoryPathType
     , repositoryBarePath
     ) where
 
@@ -36,6 +39,12 @@ data GitTreeEntry = GitTreeEntry
     , entryPath :: Text
     , entryType :: GitTreeEntryType
     , entryObjectSha :: Text
+    }
+    deriving (Eq, Show)
+
+data GitCommitContext = GitCommitContext
+    { commitSha :: Text
+    , commitMessage :: Text
     }
     deriving (Eq, Show)
 
@@ -110,6 +119,28 @@ readRepositoryFile :: User -> Repository -> Text -> Text -> IO (Maybe Text)
 readRepositoryFile owner repository branchName filePath =
     readGitOutputMaybe owner repository ["show", cs (branchName <> ":" <> filePath)]
 
+readRepositoryPathType :: User -> Repository -> Text -> Text -> IO (Maybe GitTreeEntryType)
+readRepositoryPathType _ _ _ currentPath | Text.null currentPath = pure (Just TreeEntryDirectory)
+readRepositoryPathType owner repository branchName currentPath = do
+    objectType <- readGitOutputMaybe owner repository ["cat-file", "-t", cs (branchName <> ":" <> currentPath)]
+
+    pure $
+        case objectType >>= parseObjectType . Text.strip of
+            Just entryType -> Just entryType
+            Nothing -> Nothing
+
+readLatestCommitContext :: User -> Repository -> Text -> Text -> IO (Maybe GitCommitContext)
+readLatestCommitContext owner repository branchName filePath = do
+    commitDetails <-
+        readGitOutputMaybe
+            owner
+            repository
+            ["log", "-1", "--format=%H%x09%s", cs branchName, "--", cs filePath]
+
+    pure $
+        commitDetails
+            >>= parseCommitContext
+
 initialReadme :: Repository -> Text
 initialReadme repository =
     Text.unlines $
@@ -165,6 +196,16 @@ parseTreeMetadata metadata =
         [mode, "tree", objectSha] -> Just (mode, TreeEntryDirectory, objectSha)
         [mode, "blob", objectSha] -> Just (mode, TreeEntryFile, objectSha)
         _ -> Nothing
+
+parseObjectType :: Text -> Maybe GitTreeEntryType
+parseObjectType "tree" = Just TreeEntryDirectory
+parseObjectType "blob" = Just TreeEntryFile
+parseObjectType _ = Nothing
+
+parseCommitContext :: Text -> Maybe GitCommitContext
+parseCommitContext line = do
+    (sha, message) <- splitTreeLine line
+    pure GitCommitContext { commitSha = sha, commitMessage = message }
 
 joinTreePath :: Text -> Text -> Text
 joinTreePath currentPath entryName =
