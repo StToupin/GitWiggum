@@ -10,13 +10,21 @@ data ShowView = ShowView
     , repository :: Repository
     , branchName :: Text
     , currentPath :: Text
+    , explorerPath :: Text
     , availableBranches :: [Text]
     , treeEntries :: [GitTreeEntry]
     , readmeContent :: Maybe Text
+    , selectedFilePreview :: Maybe FilePreview
+    }
+
+data FilePreview = FilePreview
+    { filePath :: Text
+    , fileContent :: Text
+    , commitContext :: Maybe GitCommitContext
     }
 
 instance View ShowView where
-    html ShowView { owner, repository, branchName, currentPath, availableBranches, treeEntries, readmeContent } =
+    html ShowView { owner, repository, branchName, currentPath, explorerPath, availableBranches, treeEntries, readmeContent, selectedFilePreview } =
         renderRepositoryShell owner repository BrowserTab [hsx|
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-body p-4">
@@ -69,7 +77,7 @@ instance View ShowView where
                         <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
                             <div>
                                 <div class="text-uppercase small fw-semibold text-secondary mb-2">Directory explorer</div>
-                                <h2 class="h5 mb-0">{currentPathLabel currentPath}</h2>
+                                <h2 class="h5 mb-0">{currentPathLabel explorerPath}</h2>
                             </div>
                             <span class="badge text-bg-light">{tshow (length treeEntries)} entries</span>
                         </div>
@@ -80,6 +88,7 @@ instance View ShowView where
                     </div>
                 </div>
 
+                {renderFilePreview selectedFilePreview}
                 {renderReadmePreview readmeContent}
         |]
 
@@ -96,6 +105,33 @@ renderReadmePreview (Just readmeContent) = [hsx|
                         <pre class="bg-body-tertiary rounded-3 p-3 mb-0"><code>{readmeContent}</code></pre>
                     </div>
                 </div>
+|]
+
+renderFilePreview :: Maybe FilePreview -> Html
+renderFilePreview Nothing = mempty
+renderFilePreview (Just FilePreview { filePath, fileContent, commitContext }) = [hsx|
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body p-4">
+                        <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+                            <div>
+                                <div class="text-uppercase small fw-semibold text-secondary mb-2">File preview</div>
+                                <h2 class="h5 mb-0">{currentPathLabel filePath}</h2>
+                            </div>
+                            {renderCommitContext commitContext}
+                        </div>
+                        <pre class="bg-body-tertiary rounded-3 p-3 mb-0"><code>{fileContent}</code></pre>
+                    </div>
+                </div>
+|]
+
+renderCommitContext :: Maybe GitCommitContext -> Html
+renderCommitContext Nothing = mempty
+renderCommitContext (Just GitCommitContext { commitSha, commitMessage }) = [hsx|
+    <div class="text-end">
+        <div class="text-uppercase small fw-semibold text-secondary mb-1">Latest change</div>
+        <div class="fw-semibold"><code>{Text.take 10 commitSha}</code></div>
+        <div class="text-secondary small">{commitMessage}</div>
+    </div>
 |]
 
 latestCommitLabel :: Repository -> Text
@@ -166,8 +202,12 @@ renderTreeEntry owner repository branchName GitTreeEntry { entryName, entryPath,
                 </a>
             |]
             TreeEntryFile -> [hsx|
-                <div class="border rounded-3 p-3 d-flex align-items-center justify-content-between gap-3">
+                <a
+                    class="border rounded-3 p-3 d-flex align-items-center justify-content-between gap-3 text-decoration-none"
+                    href={folderPath}
+                    data-posthog-id="repository-browser-file"
+                >
                     <span class="fw-semibold">{entryName}</span>
                     <span class="badge text-bg-light">File</span>
-                </div>
+                </a>
             |]

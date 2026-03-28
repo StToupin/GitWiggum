@@ -335,3 +335,61 @@ test('switch branch updates the route and visible browser content', async ({ pag
   await expect(page.getByText('feature-only.txt', { exact: true })).toBeVisible();
   expect(page.url()).not.toContain('?');
 });
+
+test('preview file shows content and updates when switching branches', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const email = `repo-preview-${suffix}@example.com`;
+  const username = `repo-preview-${suffix}`;
+  const repositoryName = `preview-${suffix}`;
+  const branchName = 'feature-ui';
+
+  await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
+  await createRepository(page, {
+    repositoryName,
+    description: 'File preview smoke test',
+    visibility: 'public',
+  });
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}$`));
+  await expect.poll(() => fs.existsSync(repositoryBarePath(username, repositoryName))).toBe(true);
+
+  seedRepositoryFiles({
+    ownerSlug: username,
+    repositoryName,
+    files: {
+      'src/App.hs': 'main branch preview\n',
+    },
+  });
+  seedRepositoryBranch({
+    ownerSlug: username,
+    repositoryName,
+    branch: branchName,
+    files: {
+      'src/App.hs': 'feature branch preview\n',
+    },
+  });
+
+  await page.goto(`/${username}/${repositoryName}`);
+  await page
+    .locator('[data-posthog-id="repository-browser-folder"]')
+    .filter({ hasText: 'src' })
+    .click();
+  await page
+    .locator('[data-posthog-id="repository-browser-file"]')
+    .filter({ hasText: 'App.hs' })
+    .click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/tree/main/src/App.hs$`));
+  await expect(page.locator('.card').filter({ hasText: 'Current path' }).locator('code')).toHaveText('/src/App.hs');
+  await expect(page.locator('.card').filter({ hasText: 'File preview' }).locator('pre code')).toContainText('main branch preview');
+  await expect(page.locator('.card').filter({ hasText: 'File preview' })).toContainText('Seed browser tree');
+
+  await page
+    .locator('[data-posthog-id="repository-browser-branch"]')
+    .filter({ hasText: branchName })
+    .click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/tree/${branchName}/src/App.hs$`));
+  await expect(page.locator('.card').filter({ hasText: 'Current path' }).locator('code')).toHaveText('/src/App.hs');
+  await expect(page.locator('.card').filter({ hasText: 'File preview' }).locator('pre code')).toContainText('feature branch preview');
+  await expect(page.locator('.card').filter({ hasText: 'File preview' })).toContainText(`Seed ${branchName}`);
+});

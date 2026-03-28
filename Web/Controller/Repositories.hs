@@ -135,12 +135,35 @@ renderBrowserView ::
     IO ()
 renderBrowserView owner repository branchName currentPath = do
     availableBranches <- liftIO $ listRepositoryBranches owner repository
-    treeEntries <- liftIO $ listRepositoryTree owner repository branchName currentPath
+    pathType <- liftIO $ readRepositoryPathType owner repository branchName currentPath
+    let explorerPath =
+            case pathType of
+                Just TreeEntryFile -> parentTreePath currentPath
+                _ -> currentPath
+    treeEntries <- liftIO $ listRepositoryTree owner repository branchName explorerPath
 
     readmeContent <-
         if Text.null currentPath
             then liftIO $ readRepositoryFile owner repository branchName "README.md"
             else pure Nothing
+
+    selectedFilePreview <-
+        case pathType of
+            Just TreeEntryFile -> do
+                fileContent <- liftIO $ readRepositoryFile owner repository branchName currentPath
+                commitContext <- liftIO $ readLatestCommitContext owner repository branchName currentPath
+
+                pure $
+                    case fileContent of
+                        Just content ->
+                            Just
+                                FilePreview
+                                    { filePath = currentPath
+                                    , fileContent = content
+                                    , commitContext
+                                    }
+                        Nothing -> Nothing
+            _ -> pure Nothing
 
     render
         ShowView
@@ -148,7 +171,18 @@ renderBrowserView owner repository branchName currentPath = do
             , repository
             , branchName
             , currentPath
+            , explorerPath
             , availableBranches
             , treeEntries
             , readmeContent
+            , selectedFilePreview
             }
+
+parentTreePath :: Text -> Text
+parentTreePath path =
+    path
+        |> Text.splitOn "/"
+        |> reverse
+        |> drop 1
+        |> reverse
+        |> Text.intercalate "/"
