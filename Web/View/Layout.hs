@@ -26,9 +26,7 @@ defaultLayout inner = [hsx|
                     GitWiggum
                 </a>
                 <div class="ms-auto d-flex align-items-center gap-3">
-                    <a class="btn btn-outline-dark btn-sm" href={pathTo NewRegistrationAction} data-posthog-id="nav-sign-up">
-                        Sign up
-                    </a>
+                    {navigationActions}
                 </div>
             </div>
         </nav>
@@ -85,3 +83,23 @@ metaTags = [hsx|
     <meta property="og:description" content="TODO"/>
     {autoRefreshMeta}
 |]
+
+navigationActions :: Html
+navigationActions =
+    case (currentUserOrNothing :: Maybe User) of
+        Just user -> [hsx|
+            <a class="btn btn-outline-dark btn-sm" href={pathTo DashboardAction} data-posthog-id="nav-dashboard">
+                {(get #username user :: Text)}
+            </a>
+            <a class="btn btn-dark btn-sm" href={pathTo LogoutAction} data-posthog-id="nav-sign-out">
+                Sign out
+            </a>
+        |]
+        Nothing -> [hsx|
+            <a class="btn btn-link btn-sm text-decoration-none" href={pathTo NewSessionAction} data-posthog-id="nav-sign-in">
+                Sign in
+            </a>
+            <a class="btn btn-outline-dark btn-sm" href={pathTo NewRegistrationAction} data-posthog-id="nav-sign-up">
+                Sign up
+            </a>
+        |]
