@@ -202,7 +202,8 @@ test('repository shell keeps repository context across browser, pull requests, a
   await page.getByRole('link', { name: 'Pull requests' }).click();
   await expect(page).toHaveURL(new RegExp(`${pullRequestsPath}$`));
   await expect(page.getByRole('heading', { name: `${username}/${repositoryName}` })).toBeVisible();
-  await expect(page.getByRole('heading', { name: 'Repository pull request surface' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Pull requests', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'New pull request' })).toBeVisible();
 
   await page.getByRole('link', { name: 'Agents' }).click();
   await expect(page).toHaveURL(new RegExp(`${agentsPath}$`));

@@ -47,6 +47,12 @@ data GitHttpController
     = RepositoryGitHttpAction { ownerSlug :: !Text, repositoryName :: !Text, gitPathInfo :: !Text }
     deriving (Eq, Show, Data)
 
+data PullRequestsController
+    = NewPullRequestAction { ownerSlug :: !Text, repositoryName :: !Text }
+    | CreatePullRequestAction { ownerSlug :: !Text, repositoryName :: !Text }
+    | ShowPullRequestConversationAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
+    deriving (Eq, Show, Data)
+
 data RepositoriesController
     = NewRepositoryAction
     | CreateRepositoryAction

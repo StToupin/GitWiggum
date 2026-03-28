@@ -1,6 +1,7 @@
 module Web.Routes where
 import qualified Data.Text as Text
 import IHP.RouterPrelude
+import Text.Read (readMaybe)
 import Generated.Types
 import Web.Types
 
@@ -43,6 +44,52 @@ instance AutoRoute GitHttpController where
 
     customPathTo RepositoryGitHttpAction { ownerSlug, repositoryName, gitPathInfo } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> ".git" <> gitPathInfo)
+
+instance AutoRoute PullRequestsController where
+    customRoutes =
+        newPullRequestRoute
+            <|> createPullRequestRoute
+            <|> showPullRequestConversationRoute
+      where
+        newPullRequestRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/pull-requests/new"
+            endOfInput
+            onlyAllowMethods [GET, HEAD]
+            pure NewPullRequestAction { ownerSlug, repositoryName }
+
+        createPullRequestRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/pull-requests/new"
+            endOfInput
+            onlyAllowMethods [POST]
+            pure CreatePullRequestAction { ownerSlug, repositoryName }
+
+        showPullRequestConversationRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/pull-requests/"
+            pullRequestNumber <- parseRouteNumber
+            string "/conversation"
+            endOfInput
+            onlyAllowMethods [GET, HEAD]
+            pure ShowPullRequestConversationAction { ownerSlug, repositoryName, pullRequestNumber }
+
+    customPathTo NewPullRequestAction { ownerSlug, repositoryName } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/new")
+    customPathTo CreatePullRequestAction { ownerSlug, repositoryName } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/new")
+    customPathTo ShowPullRequestConversationAction { ownerSlug, repositoryName, pullRequestNumber } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/conversation")
+    customPathTo _ = Nothing
 
 instance AutoRoute RepositoriesController where
     customRoutes =
@@ -118,3 +165,11 @@ parseGitHttpRepositorySegment repositorySegment =
 treePathSuffix :: Text -> Text
 treePathSuffix treePath =
     if Text.null treePath then "" else "/" <> treePath
+
+parseRouteNumber :: Parser Int
+parseRouteNumber = do
+    value <- parseText
+
+    case readMaybe (cs value) of
+        Just number -> pure number
+        Nothing -> empty
