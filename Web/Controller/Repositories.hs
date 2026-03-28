@@ -1,6 +1,8 @@
 module Web.Controller.Repositories where
 
+import qualified Control.Exception as Exception
 import qualified Data.Text as Text
+import Application.Service.GitRepository
 import IHP.QueryBuilder (filterWhereCaseInsensitive)
 import IHP.ValidationSupport.Types (ValidatorResult (..), getValidationFailure)
 import IHP.ValidationSupport.ValidateField (isSlug, nonEmpty, validateField, validateFieldIO)
@@ -30,11 +32,24 @@ instance Controller RepositoriesController where
             then render NewView { repository = repositoryWithValidation }
             else do
                 createdRepository <- repositoryWithValidation |> createRecord
-                redirectTo
-                    ShowRepositoryAction
-                        { ownerSlug = personalOwnerSlug currentUser
-                        , repositoryName = get #name createdRepository
-                        }
+                bootstrapResult <- liftIO $ Exception.try @Exception.SomeException (initializeRepositoryOnDisk currentUser createdRepository)
+
+                case bootstrapResult of
+                    Left _ -> do
+                        liftIO (cleanupRepositoryOnDisk currentUser createdRepository)
+                        createdRepository |> deleteRecord
+                        setErrorMessage "We could not initialize the repository on disk. Please try again."
+                        redirectTo NewRepositoryAction
+                    Right latestCommitSha -> do
+                        createdRepository
+                            |> set #latestCommitSha (Just latestCommitSha)
+                            |> updateRecord
+
+                        redirectTo
+                            ShowRepositoryAction
+                                { ownerSlug = personalOwnerSlug currentUser
+                                , repositoryName = get #name createdRepository
+                                }
 
     action ShowRepositoryAction { ownerSlug, repositoryName } = do
         owner <-
@@ -48,7 +63,10 @@ instance Controller RepositoriesController where
                 |> filterWhere (#name, repositoryName)
                 |> fetchOne
 
-        render ShowView { owner, repository }
+        readmeContent <- liftIO $ readRepositoryFileFromDefaultBranch owner repository "README.md"
+        rootEntries <- liftIO $ readRepositoryRootEntries owner repository
+
+        render ShowView { owner, repository, readmeContent, rootEntries }
 
 buildRepository :: User -> Text -> Text -> Text -> Repository
 buildRepository currentUser name description visibility =

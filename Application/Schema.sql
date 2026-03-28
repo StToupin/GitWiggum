@@ -27,6 +27,7 @@ CREATE TABLE repositories (
     description TEXT DEFAULT NULL,
     is_private BOOLEAN DEFAULT FALSE NOT NULL,
     default_branch TEXT DEFAULT 'main' NOT NULL,
+    latest_commit_sha TEXT DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL
 );

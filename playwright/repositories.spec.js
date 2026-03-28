@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('node:child_process');
+const fs = require('node:fs');
 const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
@@ -78,6 +79,7 @@ test('create repository redirects to the canonical owner route', async ({ page }
   const repositoryName = `project-${suffix}`;
 
   await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
+  const userId = queryValue(`select id from users where email = '${email}';`);
 
   await page.getByRole('link', { name: 'Create repository' }).click();
   await page.getByLabel('Repository name').fill(repositoryName);
@@ -85,10 +87,21 @@ test('create repository redirects to the canonical owner route', async ({ page }
   await page.locator('input[name="visibility"][value="private"]').check();
   await page.getByRole('button', { name: 'Create repository' }).click();
 
+  const latestCommitSha = queryValue(
+    `select latest_commit_sha from repositories where owner_user_id = '${userId}' and name = '${repositoryName}';`,
+  );
+  const bareRepositoryPath = path.join(repoRoot, 'data', 'repositories', username, `${repositoryName}.git`);
+
   await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}$`));
   await expect(page.getByRole('heading', { name: `${username}/${repositoryName}` })).toBeVisible();
-  await expect(page.getByText('Canonical repository route smoke test')).toBeVisible();
+  await expect(page.getByText('Canonical repository route smoke test', { exact: true })).toBeVisible();
   await expect(page.getByText('Private')).toBeVisible();
+  await expect(page.locator('span.badge').filter({ hasText: 'README.md' })).toBeVisible();
+  await expect(page.locator('pre code')).toContainText(`# ${repositoryName}`);
+  await expect(page.locator('pre code')).toContainText('Created with GitWiggum.');
+  await expect(page.getByText(latestCommitSha.slice(0, 10))).toBeVisible();
+  expect(latestCommitSha).toMatch(/^[0-9a-f]{40}$/);
+  expect(fs.existsSync(bareRepositoryPath)).toBe(true);
 
   await page.goto('/Dashboard');
   await expect(page.getByText(repositoryName)).toBeVisible();
