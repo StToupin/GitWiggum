@@ -14,6 +14,7 @@ import Web.Controller.PasswordResets
 import Web.Controller.Dashboard
 import Web.Controller.AccountSettings
 import Web.Controller.GitHttp
+import Web.Controller.PullRequests
 import Web.Controller.Repositories
 
 instance FrontController WebApplication where
@@ -27,6 +28,7 @@ instance FrontController WebApplication where
         , parseRoute @DashboardController
         , parseRoute @AccountSettingsController
         , parseRoute @GitHttpController
+        , parseRoute @PullRequestsController
         , parseRoute @RepositoriesController
         -- Generator Marker
         ]

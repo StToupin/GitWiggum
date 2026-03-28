@@ -63,7 +63,13 @@ instance Controller RepositoriesController where
 
     action RepositoryPullRequestsAction { ownerSlug, repositoryName } = do
         (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
-        render PullRequestsView { owner, repository }
+        pullRequests <-
+            query @PullRequest
+                |> filterWhere (#repositoryId, get #id repository)
+                |> orderByDesc #number
+                |> fetch
+
+        render PullRequestsView { owner, repository, pullRequests }
 
     action RepositoryAgentsAction { ownerSlug, repositoryName } = do
         (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
