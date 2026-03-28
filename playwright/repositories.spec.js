@@ -91,6 +91,31 @@ function seedRepositoryFiles({ ownerSlug, repositoryName, files, branch = 'main'
   }
 }
 
+function seedRepositoryBranch({ ownerSlug, repositoryName, branch, files, fromBranch = 'main' }) {
+  const barePath = repositoryBarePath(ownerSlug, repositoryName);
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitwiggum-branch-'));
+  const cloneDir = path.join(tempRoot, 'repo');
+
+  try {
+    runGit(['clone', '--branch', fromBranch, barePath, cloneDir]);
+    runGit(['checkout', '-b', branch], { cwd: cloneDir });
+    runGit(['config', 'user.name', 'Playwright Seeder'], { cwd: cloneDir });
+    runGit(['config', 'user.email', 'playwright@example.com'], { cwd: cloneDir });
+
+    for (const [relativePath, content] of Object.entries(files)) {
+      const absolutePath = path.join(cloneDir, relativePath);
+      fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+      fs.writeFileSync(absolutePath, content, 'utf8');
+    }
+
+    runGit(['add', '.'], { cwd: cloneDir });
+    runGit(['commit', '-m', `Seed ${branch}`], { cwd: cloneDir });
+    runGit(['push', 'origin', `HEAD:${branch}`], { cwd: cloneDir });
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
 test('dashboard list shows visible repositories and create repository CTA', async ({ page }) => {
   const suffix = Date.now().toString(36);
   const email = `repo-${suffix}@example.com`;
@@ -259,5 +284,54 @@ test('browse folders updates the browser route and renders nested contents', asy
   await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/tree/main/src/components$`));
   await expect(page.locator('.card').filter({ hasText: 'Current path' }).locator('code')).toHaveText('/src/components');
   await expect(page.getByText('Button.hs', { exact: true })).toBeVisible();
+  expect(page.url()).not.toContain('?');
+});
+
+test('switch branch updates the route and visible browser content', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const email = `repo-branch-${suffix}@example.com`;
+  const username = `repo-branch-${suffix}`;
+  const repositoryName = `branches-${suffix}`;
+  const branchName = 'feature-ui';
+
+  await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
+  await createRepository(page, {
+    repositoryName,
+    description: 'Branch selector smoke test',
+    visibility: 'public',
+  });
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}$`));
+  await expect.poll(() => fs.existsSync(repositoryBarePath(username, repositoryName))).toBe(true);
+
+  seedRepositoryFiles({
+    ownerSlug: username,
+    repositoryName,
+    files: {
+      'src/App.hs': 'module App where\n',
+    },
+  });
+  seedRepositoryBranch({
+    ownerSlug: username,
+    repositoryName,
+    branch: branchName,
+    files: {
+      'feature-only.txt': 'feature branch only\n',
+    },
+  });
+
+  await page.goto(`/${username}/${repositoryName}`);
+  const branchSelector = page.locator('.card').filter({ hasText: 'Branch selector' });
+  await expect(branchSelector.getByText('main', { exact: true })).toBeVisible();
+  await expect(branchSelector.getByText(branchName, { exact: true })).toBeVisible();
+  await expect(page.getByText('src', { exact: true })).toBeVisible();
+
+  await page
+    .locator('[data-posthog-id="repository-browser-branch"]')
+    .filter({ hasText: branchName })
+    .click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/tree/${branchName}$`));
+  await expect(page.locator('.card').filter({ hasText: 'Selected branch' }).getByText(branchName, { exact: true })).toBeVisible();
+  await expect(page.getByText('feature-only.txt', { exact: true })).toBeVisible();
   expect(page.url()).not.toContain('?');
 });
