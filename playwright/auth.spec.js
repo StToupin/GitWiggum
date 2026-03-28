@@ -117,3 +117,43 @@ test('sign in and sign out work for confirmed users', async ({ page }) => {
   await page.getByRole('link', { name: 'Sign out' }).click();
   await expect(page.getByRole('link', { name: 'Sign in' })).toBeVisible();
 });
+
+test('password reset request sends a generic response and stores a reset token', async ({ page }) => {
+  await clearMailhogMessages();
+
+  const suffix = `${Date.now().toString(36)}-reset`;
+  const email = `auth-${suffix}@example.com`;
+  const username = `auth-${suffix}`;
+
+  await page.goto('/NewRegistration');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password').fill('secret123');
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByText('Account created. Confirm your email before signing in.')).toBeVisible();
+
+  await clearMailhogMessages();
+
+  await page.goto('/NewPasswordReset');
+  await page.getByLabel('Email').fill(email);
+  await page.getByRole('button', { name: 'Send reset link' }).click();
+
+  await expect(page.getByText('If an account exists for that email, we sent a password reset link.')).toBeVisible();
+
+  const message = await waitForMailhogMessage({
+    to: email,
+    subjectIncludes: 'Reset your GitWiggum password',
+  });
+
+  const resetToken = queryValue(`select password_reset_token from users where email = '${email}';`);
+  const resetExpiry = queryValue(`select password_reset_token_expires_at is not null from users where email = '${email}';`);
+
+  expect(resetToken).toBeTruthy();
+  expect(resetExpiry).toBe('t');
+  expect(decodeQuotedPrintable(message.Content?.Body || '')).toContain(resetToken);
+
+  await page.goto('/NewPasswordReset');
+  await page.getByLabel('Email').fill(`missing-${suffix}@example.com`);
+  await page.getByRole('button', { name: 'Send reset link' }).click();
+  await expect(page.getByText('If an account exists for that email, we sent a password reset link.')).toBeVisible();
+});
