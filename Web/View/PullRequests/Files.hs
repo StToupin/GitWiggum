@@ -38,9 +38,7 @@ instance View FilesView where
                     |> map (\diffAiResponseJob -> (get #fingerprint diffAiResponseJob, diffAiResponseJob))
                     |> Map.fromList
          in renderPullRequestShell owner repository pullRequest author FilesTab [hsx|
-            <div class="d-flex flex-column gap-4">
-                {if null diffFiles then emptyFilesState else forEach diffFiles (renderDiffFile askAiPath pullRequest headSha jobsByFingerprint)}
-            </div>
+            <div class="d-flex flex-column gap-4">{if null diffFiles then emptyFilesState else forEach diffFiles (renderDiffFile askAiPath pullRequest headSha jobsByFingerprint)}</div>
         |]
 
 instance View DiffAiResponseRowView where
@@ -50,10 +48,12 @@ instance View DiffAiResponseRowView where
 emptyFilesState :: Html
 emptyFilesState = [hsx|
     <div class="card shadow-sm border-0">
-        <div class="card-body p-4">
-            <div class="text-uppercase small fw-semibold text-secondary mb-2">Files</div>
-            <p class="mb-0 text-secondary">No changes are in this compare range.</p>
+      <div class="card-body p-4">
+        <div class="text-uppercase small fw-semibold text-secondary mb-2">
+          Files
         </div>
+        <p class="mb-0 text-secondary">No changes are in this compare range.</p>
+      </div>
     </div>
 |]
 
@@ -62,35 +62,39 @@ renderDiffFile askAiPath pullRequest headSha jobsByFingerprint diffFile@GitDiffF
     let diffFilePath = diffFileRequestPath diffFile
      in [hsx|
     <div class="card shadow-sm border-0">
-        <div class="card-body p-4">
-            <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
-                <div>
-                    <div class="text-uppercase small fw-semibold text-secondary mb-2">Changed file</div>
-                    <h3 class="h6 mb-0"><code>{diffFileLabel diffFile}</code></h3>
-                </div>
-                <span class="badge text-bg-light">{tshow (length hunks)} hunks</span>
+      <div class="card-body p-4">
+        <div
+          class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3"
+        >
+          <div>
+            <div class="text-uppercase small fw-semibold text-secondary mb-2">
+              Changed file
             </div>
-
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <tbody>
-                        {forEach hunks (renderDiffHunk askAiPath pullRequest headSha jobsByFingerprint diffFilePath)}
-                    </tbody>
-                </table>
-            </div>
+            <h3 class="h6 mb-0"><code>{diffFileLabel diffFile}</code></h3>
+          </div>
+          <span class="badge text-bg-light">{tshow (length hunks)} hunks</span>
         </div>
+
+        <div class="table-responsive">
+          <table class="table table-sm align-middle mb-0">
+            <tbody>
+              {forEach hunks (renderDiffHunk askAiPath pullRequest headSha jobsByFingerprint diffFilePath)}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
 |]
 
 renderDiffHunk :: Text -> PullRequest -> Maybe Text -> Map.Map Text DiffAiResponseJob -> Text -> GitDiffHunk -> Html
 renderDiffHunk askAiPath pullRequest headSha jobsByFingerprint diffFilePath GitDiffHunk { header, lines } = [hsx|
     <hsx-fragment>
-        <tr class="table-light">
-            <td class="text-secondary text-end small"><code>-</code></td>
-            <td class="text-secondary text-end small"><code>-</code></td>
-            <td class="font-monospace small"><code>{header}</code></td>
-        </tr>
-        {forEach lines (renderDiffLine askAiPath pullRequest headSha jobsByFingerprint diffFilePath)}
+      <tr class="table-light">
+        <td class="text-secondary text-end small"><code>-</code></td>
+        <td class="text-secondary text-end small"><code>-</code></td>
+        <td class="font-monospace small"><code>{header}</code></td>
+      </tr>
+      {forEach lines (renderDiffLine askAiPath pullRequest headSha jobsByFingerprint diffFilePath)}
     </hsx-fragment>
 |]
 
@@ -112,35 +116,39 @@ renderDiffLine askAiPath pullRequest headSha jobsByFingerprint diffFilePath diff
                 >>= (\fingerprint -> Map.lookup fingerprint jobsByFingerprint)
      in [hsx|
         <hsx-fragment>
-            <tr class={diffLineRowClass lineType}>
-                <td class="text-secondary text-end small align-top"><code>{renderLineNumber oldLineNumber}</code></td>
-                <td class="text-secondary text-end small align-top"><code>{renderLineNumber newLineNumber}</code></td>
-                <td class="font-monospace align-top">
-                    <div class="d-flex align-items-start justify-content-between gap-3">
-                        <pre class="mb-0 bg-transparent border-0 p-0 flex-grow-1"><code>{diffLinePrefix lineType}{content}</code></pre>
-                        <div class="d-inline-flex align-items-start gap-2">
-                            {renderPromptContextAction promptContextId}
-                            {renderAskAiAction askAiPath maybeSlotId maybeLocation}
-                        </div>
-                    </div>
-                </td>
-            </tr>
-            {renderPromptContextRow promptContextId diffFilePath diffLine}
-            {renderDiffAiResponseSlotRow maybeSlotId maybeDiffAiJob}
+          <tr class={diffLineRowClass lineType}>
+            <td class="text-secondary text-end small align-top">
+              <code>{renderLineNumber oldLineNumber}</code>
+            </td>
+            <td class="text-secondary text-end small align-top">
+              <code>{renderLineNumber newLineNumber}</code>
+            </td>
+            <td class="font-monospace align-top">
+              <div class="d-flex align-items-start justify-content-between gap-3">
+                <pre
+                  class="mb-0 bg-transparent border-0 p-0 flex-grow-1"
+                ><code>{diffLinePrefix lineType}{content}</code></pre>
+                <div class="d-inline-flex align-items-start gap-2">
+                  {renderPromptContextAction promptContextId} {renderAskAiAction askAiPath maybeSlotId maybeLocation}
+                </div>
+              </div>
+            </td>
+          </tr>
+          {renderPromptContextRow promptContextId diffFilePath diffLine} {renderDiffAiResponseSlotRow maybeSlotId maybeDiffAiJob}
         </hsx-fragment>
     |]
 
 renderPromptContextAction :: Text -> Html
 renderPromptContextAction promptContextId = [hsx|
     <button
-        class="btn btn-outline-secondary btn-sm"
-        type="button"
-        aria-controls={promptContextId}
-        aria-expanded="false"
-        data-posthog-id="pull-request-diff-prompt-context"
-        onclick={"const panel = document.getElementById('" <> promptContextId <> "'); if (!panel) return; const isHidden = panel.classList.toggle('d-none'); this.setAttribute('aria-expanded', isHidden ? 'false' : 'true');"}
+      class="btn btn-outline-secondary btn-sm"
+      type="button"
+      aria-controls={promptContextId}
+      aria-expanded="false"
+      data-posthog-id="pull-request-diff-prompt-context"
+      onclick={"const panel = document.getElementById('" <> promptContextId <> "'); if (!panel) return; const isHidden = panel.classList.toggle('d-none'); this.setAttribute('aria-expanded', isHidden ? 'false' : 'true');"}
     >
-        Prompt context
+      Prompt context
     </button>
 |]
 
@@ -149,30 +157,48 @@ renderPromptContextRow promptContextId diffFilePath diffLine =
     let promptPreview = buildPromptContextPrompt diffFilePath diffLine
         thinkingPreview = buildPromptThinkingContext diffLine
      in [hsx|
-        <tr id={promptContextId} class="table-light d-none" data-prompt-context-slot="true">
-            <td></td>
-            <td></td>
-            <td>
-                <div class="border rounded-3 bg-white p-3 my-2">
-                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
-                        <div>
-                            <div class="text-uppercase small fw-semibold text-secondary">Prompt context</div>
-                            <div class="small text-secondary">UI-only preview for line-level AI provenance.</div>
-                        </div>
-                        <span class="badge text-bg-light">Fizz Buzz prompt</span>
-                    </div>
-                    <div class="d-flex flex-column gap-3">
-                        <div>
-                            <div class="text-uppercase small fw-semibold text-secondary mb-1">Prompt</div>
-                            <pre class="mb-0 bg-transparent border rounded-2 p-3 text-wrap"><code>{promptPreview}</code></pre>
-                        </div>
-                        <div>
-                            <div class="text-uppercase small fw-semibold text-secondary mb-1">AI thinking context</div>
-                            <pre class="mb-0 bg-transparent border rounded-2 p-3 text-wrap"><code>{thinkingPreview}</code></pre>
-                        </div>
-                    </div>
+        <tr
+          id={promptContextId}
+          class="table-light d-none"
+          data-prompt-context-slot="true"
+        >
+          <td></td>
+          <td></td>
+          <td>
+            <div class="border rounded-3 bg-white p-3 my-2">
+              <div
+                class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3"
+              >
+                <div>
+                  <div class="text-uppercase small fw-semibold text-secondary">
+                    Prompt context
+                  </div>
+                  <div class="small text-secondary">
+                    UI-only preview for line-level AI provenance.
+                  </div>
                 </div>
-            </td>
+                <span class="badge text-bg-light">Fizz Buzz prompt</span>
+              </div>
+              <div class="d-flex flex-column gap-3">
+                <div>
+                  <div class="text-uppercase small fw-semibold text-secondary mb-1">
+                    Prompt
+                  </div>
+                  <pre
+                    class="mb-0 bg-transparent border rounded-2 p-3 text-wrap"
+                  ><code>{promptPreview}</code></pre>
+                </div>
+                <div>
+                  <div class="text-uppercase small fw-semibold text-secondary mb-1">
+                    AI thinking context
+                  </div>
+                  <pre
+                    class="mb-0 bg-transparent border rounded-2 p-3 text-wrap"
+                  ><code>{thinkingPreview}</code></pre>
+                </div>
+              </div>
+            </div>
+          </td>
         </tr>
     |]
 
@@ -181,18 +207,22 @@ renderAskAiAction _ _ Nothing = mempty
 renderAskAiAction _ Nothing _ = mempty
 renderAskAiAction askAiPath (Just slotId) (Just location) = [hsx|
     <form
-        class="d-inline-flex"
-        hx-post={askAiPath}
-        hx-target={"#" <> slotId}
-        hx-select={"#" <> slotId}
-        hx-swap="outerHTML"
+      class="d-inline-flex"
+      hx-post={askAiPath}
+      hx-target={"#" <> slotId}
+      hx-select={"#" <> slotId}
+      hx-swap="outerHTML"
     >
-        <input type="hidden" name="filePath" value={location.filePath}/>
-        <input type="hidden" name="side" value={location.side}/>
-        <input type="hidden" name="lineNumber" value={tshow location.lineNumber}/>
-        <button class="btn btn-outline-dark btn-sm" type="submit" data-posthog-id="pull-request-diff-ask-ai">
-            Ask AI
-        </button>
+      <input type="hidden" name="filePath" value={location.filePath} />
+      <input type="hidden" name="side" value={location.side} />
+      <input type="hidden" name="lineNumber" value={tshow location.lineNumber} />
+      <button
+        class="btn btn-outline-dark btn-sm"
+        type="submit"
+        data-posthog-id="pull-request-diff-ask-ai"
+      >
+        Ask AI
+      </button>
     </form>
 |]
 
@@ -208,14 +238,16 @@ renderDiffAiResponseSlotRow (Just slotId) maybeDiffAiJob =
 renderDiffAiResponseSlotPlaceholder :: Text -> Html
 renderDiffAiResponseSlotPlaceholder slotId = [hsx|
     <tr id={slotId} class="d-none" data-diff-ai-response-slot="true">
-        <td colspan="3" class="p-0 border-0"></td>
+      <td colspan="3" class="p-0 border-0"></td>
     </tr>
 |]
 
 renderDiffAiResponseSwapTable :: Html -> Html
 renderDiffAiResponseSwapTable rowHtml = [hsx|
     <table class="d-none">
-        <tbody>{rowHtml}</tbody>
+      <tbody>
+        {rowHtml}
+      </tbody>
     </table>
 |]
 
@@ -223,20 +255,26 @@ renderDiffAiResponseRow :: DiffAiResponseJob -> Html
 renderDiffAiResponseRow diffAiResponseJob =
     let slotId = diffAiSlotId (get #fingerprint diffAiResponseJob)
      in [hsx|
-        <tr id={slotId} class="table-light" data-diff-ai-response-slot="true">
-            <td></td>
-            <td></td>
-            <td>
-                <div class="border rounded-3 bg-white p-3 my-2">
-                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                        <div class="text-uppercase small fw-semibold text-secondary">AI explanation</div>
-                        <span class={diffAiStatusBadgeClass (get #status diffAiResponseJob)}>
-                            {diffAiStatusLabel (get #status diffAiResponseJob)}
-                        </span>
-                    </div>
-                    {renderDiffAiResponseBody diffAiResponseJob}
+        <tr
+          id={slotId}
+          class="table-light"
+          data-diff-ai-response-slot="true"
+        >
+          <td></td>
+          <td></td>
+          <td>
+            <div class="border rounded-3 bg-white p-3 my-2">
+              <div
+                class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2"
+              >
+                <div class="text-uppercase small fw-semibold text-secondary">
+                  AI explanation
                 </div>
-            </td>
+                <span class={diffAiStatusBadgeClass (get #status diffAiResponseJob)}> {diffAiStatusLabel (get #status diffAiResponseJob)} </span>
+              </div>
+              {renderDiffAiResponseBody diffAiResponseJob}
+            </div>
+          </td>
         </tr>
     |]
 
@@ -248,14 +286,14 @@ renderDiffAiResponseBody diffAiResponseJob =
         |]
         JobStatusRunning -> [hsx|
             <div class="d-flex flex-column gap-2">
-                <div class="text-secondary">Generating explanation...</div>
-                {renderDiffAiResponseText diffAiResponseJob}
+              <div class="text-secondary">Generating explanation...</div>
+              {renderDiffAiResponseText diffAiResponseJob}
             </div>
         |]
         JobStatusRetry -> [hsx|
             <div class="d-flex flex-column gap-2">
-                <div class="text-secondary">Retrying explanation...</div>
-                {renderDiffAiResponseText diffAiResponseJob}
+              <div class="text-secondary">Retrying explanation...</div>
+              {renderDiffAiResponseText diffAiResponseJob}
             </div>
         |]
         JobStatusFailed -> [hsx|
@@ -269,7 +307,9 @@ renderDiffAiResponseBody diffAiResponseJob =
 
 renderDiffAiResponseText :: DiffAiResponseJob -> Html
 renderDiffAiResponseText diffAiResponseJob = [hsx|
-    <pre class="mb-0 bg-transparent border-0 p-0 text-wrap"><code>{fromMaybe ("" :: Text) (get #response diffAiResponseJob)}</code></pre>
+    <pre
+      class="mb-0 bg-transparent border-0 p-0 text-wrap"
+    ><code>{fromMaybe ("" :: Text) (get #response diffAiResponseJob)}</code></pre>
 |]
 
 diffFileLabel :: GitDiffFile -> Text
@@ -349,22 +389,13 @@ sanitizeDomIdPart =
 buildPromptContextPrompt :: Text -> GitDiffLine -> Text
 buildPromptContextPrompt diffFilePath diffLine =
     Text.unlines
-        [ "Generate or refine the Fizz Buzz implementation touched by this diff line."
-        , ""
-        , "File: " <> diffFilePath
-        , "Target line: " <> promptContextLineLabel diffLine
-        , "Line content: " <> diffLinePrefix (lineType diffLine) <> content diffLine
-        , ""
-        , "Keep the surrounding style intact, make the logic easy to review, and preserve predictable Fizz Buzz output."
+        [ "implement fizbuz in java"
         ]
 
 buildPromptThinkingContext :: GitDiffLine -> Text
 buildPromptThinkingContext diffLine =
     Text.unlines
-        [ "- Focus on why this line exists in the Fizz Buzz flow, not just what it does."
-        , "- Check whether the line affects divisibility rules, emitted tokens, or output formatting."
-        , "- Explain reviewer-relevant tradeoffs before suggesting any rewrite."
-        , "- Use this diff line as the anchor: " <> diffLinePrefix (lineType diffLine) <> content diffLine
+        [ "- Implemented fizbuz in src/  Fizbuz.java."
         ]
 
 promptContextLineLabel :: GitDiffLine -> Text
