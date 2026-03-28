@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('node:child_process');
 const fs = require('node:fs');
+const os = require('node:os');
 const path = require('node:path');
 
 const repoRoot = path.resolve(__dirname, '..');
@@ -54,6 +55,42 @@ async function createRepository(page, { repositoryName, description, visibility 
   await page.getByRole('button', { name: 'Create repository' }).click();
 }
 
+function runGit(args, { cwd } = {}) {
+  return execFileSync('git', args, {
+    cwd,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  }).trim();
+}
+
+function repositoryBarePath(ownerSlug, repositoryName) {
+  return path.join(repoRoot, 'data', 'repositories', ownerSlug, `${repositoryName}.git`);
+}
+
+function seedRepositoryFiles({ ownerSlug, repositoryName, files, branch = 'main' }) {
+  const barePath = repositoryBarePath(ownerSlug, repositoryName);
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitwiggum-browser-'));
+  const cloneDir = path.join(tempRoot, 'repo');
+
+  try {
+    runGit(['clone', '--branch', branch, barePath, cloneDir]);
+    runGit(['config', 'user.name', 'Playwright Seeder'], { cwd: cloneDir });
+    runGit(['config', 'user.email', 'playwright@example.com'], { cwd: cloneDir });
+
+    for (const [relativePath, content] of Object.entries(files)) {
+      const absolutePath = path.join(cloneDir, relativePath);
+      fs.mkdirSync(path.dirname(absolutePath), { recursive: true });
+      fs.writeFileSync(absolutePath, content, 'utf8');
+    }
+
+    runGit(['add', '.'], { cwd: cloneDir });
+    runGit(['commit', '-m', 'Seed browser tree'], { cwd: cloneDir });
+    runGit(['push', 'origin', `HEAD:${branch}`], { cwd: cloneDir });
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
 test('dashboard list shows visible repositories and create repository CTA', async ({ page }) => {
   const suffix = Date.now().toString(36);
   const email = `repo-${suffix}@example.com`;
@@ -98,13 +135,14 @@ test('create repository redirects to the canonical owner route', async ({ page }
   const latestCommitSha = queryValue(
     `select latest_commit_sha from repositories where owner_user_id = '${userId}' and name = '${repositoryName}';`,
   );
-  const bareRepositoryPath = path.join(repoRoot, 'data', 'repositories', username, `${repositoryName}.git`);
+  const bareRepositoryPath = repositoryBarePath(username, repositoryName);
+  const directoryExplorer = page.locator('.card').filter({ hasText: 'Directory explorer' });
 
   await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}$`));
   await expect(page.getByRole('heading', { name: `${username}/${repositoryName}` })).toBeVisible();
   await expect(page.getByText('Canonical repository route smoke test', { exact: true })).toBeVisible();
   await expect(page.getByText('Private')).toBeVisible();
-  await expect(page.locator('span.badge').filter({ hasText: 'README.md' })).toBeVisible();
+  await expect(directoryExplorer.getByText('README.md', { exact: true })).toBeVisible();
   await expect(page.locator('pre code')).toContainText(`# ${repositoryName}`);
   await expect(page.locator('pre code')).toContainText('Created with GitWiggum.');
   await expect(page.getByText(latestCommitSha.slice(0, 10))).toBeVisible();
@@ -174,5 +212,52 @@ test('browser root shows selected default branch and current path', async ({ pag
   await expect(page.getByRole('heading', { name: 'Repository root' })).toBeVisible();
   await expect(selectedBranchCard.getByText('main', { exact: true })).toBeVisible();
   await expect(currentPathCard.locator('code')).toHaveText('/');
+  expect(page.url()).not.toContain('?');
+});
+
+test('browse folders updates the browser route and renders nested contents', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const email = `repo-folders-${suffix}@example.com`;
+  const username = `repo-folders-${suffix}`;
+  const repositoryName = `folders-${suffix}`;
+
+  await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
+  await createRepository(page, {
+    repositoryName,
+    description: 'Nested folder browser smoke test',
+    visibility: 'public',
+  });
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}$`));
+  await expect.poll(() => fs.existsSync(repositoryBarePath(username, repositoryName))).toBe(true);
+
+  seedRepositoryFiles({
+    ownerSlug: username,
+    repositoryName,
+    files: {
+      'src/App.hs': 'module App where\n',
+      'src/components/Button.hs': 'module Button where\n',
+      'docs/guide.md': '# Guide\n',
+    },
+  });
+
+  await page.goto(`/${username}/${repositoryName}`);
+  await page
+    .locator('[data-posthog-id="repository-browser-folder"]')
+    .filter({ hasText: 'src' })
+    .click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/tree/main/src$`));
+  await expect(page.locator('.card').filter({ hasText: 'Current path' }).locator('code')).toHaveText('/src');
+  await expect(page.locator('[data-posthog-id="repository-browser-folder"]').filter({ hasText: 'components' })).toBeVisible();
+  await expect(page.getByText('App.hs', { exact: true })).toBeVisible();
+
+  await page
+    .locator('[data-posthog-id="repository-browser-folder"]')
+    .filter({ hasText: 'components' })
+    .click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/tree/main/src/components$`));
+  await expect(page.locator('.card').filter({ hasText: 'Current path' }).locator('code')).toHaveText('/src/components');
+  await expect(page.getByText('Button.hs', { exact: true })).toBeVisible();
   expect(page.url()).not.toContain('?');
 });

@@ -42,6 +42,7 @@ data RepositoriesController
     = NewRepositoryAction
     | CreateRepositoryAction
     | ShowRepositoryAction { ownerSlug :: !Text, repositoryName :: !Text }
+    | RepositoryTreeAction { ownerSlug :: !Text, repositoryName :: !Text, branchName :: !Text, treePath :: !Text }
     | RepositoryPullRequestsAction { ownerSlug :: !Text, repositoryName :: !Text }
     | RepositoryAgentsAction { ownerSlug :: !Text, repositoryName :: !Text }
     deriving (Eq, Show, Data)
