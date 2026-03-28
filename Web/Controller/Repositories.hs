@@ -7,7 +7,9 @@ import IHP.QueryBuilder (filterWhereCaseInsensitive)
 import IHP.ValidationSupport.Types (ValidatorResult (..), getValidationFailure)
 import IHP.ValidationSupport.ValidateField (isSlug, nonEmpty, validateField, validateFieldIO)
 import Web.Controller.Prelude
+import Web.View.Repositories.Agents
 import Web.View.Repositories.New
+import Web.View.Repositories.PullRequests
 import Web.View.Repositories.Show
 
 instance Controller RepositoriesController where
@@ -52,21 +54,20 @@ instance Controller RepositoriesController where
                                 }
 
     action ShowRepositoryAction { ownerSlug, repositoryName } = do
-        owner <-
-            query @User
-                |> filterWhere (#username, ownerSlug)
-                |> fetchOne
-
-        repository <-
-            query @Repository
-                |> filterWhere (#ownerUserId, get #id owner)
-                |> filterWhere (#name, repositoryName)
-                |> fetchOne
+        (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
 
         readmeContent <- liftIO $ readRepositoryFileFromDefaultBranch owner repository "README.md"
         rootEntries <- liftIO $ readRepositoryRootEntries owner repository
 
         render ShowView { owner, repository, readmeContent, rootEntries }
+
+    action RepositoryPullRequestsAction { ownerSlug, repositoryName } = do
+        (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
+        render PullRequestsView { owner, repository }
+
+    action RepositoryAgentsAction { ownerSlug, repositoryName } = do
+        (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
+        render AgentsView { owner, repository }
 
 buildRepository :: User -> Text -> Text -> Text -> Repository
 buildRepository currentUser name description visibility =
@@ -105,3 +106,22 @@ normalizeRepositoryDescription description =
 hasErrors :: Repository -> Bool
 hasErrors repository =
     isJust (getValidationFailure #name repository)
+
+fetchRepositoryContext ::
+    (?modelContext :: ModelContext) =>
+    Text ->
+    Text ->
+    IO (User, Repository)
+fetchRepositoryContext ownerSlug repositoryName = do
+    owner <-
+        query @User
+            |> filterWhere (#username, ownerSlug)
+            |> fetchOne
+
+    repository <-
+        query @Repository
+            |> filterWhere (#ownerUserId, get #id owner)
+            |> filterWhere (#name, repositoryName)
+            |> fetchOne
+
+    pure (owner, repository)

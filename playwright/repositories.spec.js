@@ -46,6 +46,14 @@ async function signUpConfirmAndSignIn(page, { email, username, password }) {
   await page.getByRole('button', { name: 'Sign in' }).click();
 }
 
+async function createRepository(page, { repositoryName, description, visibility = 'public' }) {
+  await page.getByRole('link', { name: 'Create repository' }).click();
+  await page.getByLabel('Repository name').fill(repositoryName);
+  await page.getByLabel('Description').fill(description);
+  await page.locator(`input[name="visibility"][value="${visibility}"]`).check();
+  await page.getByRole('button', { name: 'Create repository' }).click();
+}
+
 test('dashboard list shows visible repositories and create repository CTA', async ({ page }) => {
   const suffix = Date.now().toString(36);
   const email = `repo-${suffix}@example.com`;
@@ -81,11 +89,11 @@ test('create repository redirects to the canonical owner route', async ({ page }
   await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
   const userId = queryValue(`select id from users where email = '${email}';`);
 
-  await page.getByRole('link', { name: 'Create repository' }).click();
-  await page.getByLabel('Repository name').fill(repositoryName);
-  await page.getByLabel('Description').fill('Canonical repository route smoke test');
-  await page.locator('input[name="visibility"][value="private"]').check();
-  await page.getByRole('button', { name: 'Create repository' }).click();
+  await createRepository(page, {
+    repositoryName,
+    description: 'Canonical repository route smoke test',
+    visibility: 'private',
+  });
 
   const latestCommitSha = queryValue(
     `select latest_commit_sha from repositories where owner_user_id = '${userId}' and name = '${repositoryName}';`,
@@ -105,4 +113,41 @@ test('create repository redirects to the canonical owner route', async ({ page }
 
   await page.goto('/Dashboard');
   await expect(page.getByText(repositoryName)).toBeVisible();
+});
+
+test('repository shell keeps repository context across browser, pull requests, and agents routes', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const email = `repo-shell-${suffix}@example.com`;
+  const username = `repo-shell-${suffix}`;
+  const repositoryName = `shell-${suffix}`;
+
+  await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
+  await createRepository(page, {
+    repositoryName,
+    description: 'Repository shell route smoke test',
+    visibility: 'public',
+  });
+
+  const browserPath = `/${username}/${repositoryName}`;
+  const pullRequestsPath = `/${username}/${repositoryName}/pull-requests`;
+  const agentsPath = `/${username}/${repositoryName}/agents`;
+
+  await expect(page.getByRole('link', { name: 'Browser' })).toHaveAttribute('href', browserPath);
+  await expect(page.getByRole('link', { name: 'Pull requests' })).toHaveAttribute('href', pullRequestsPath);
+  await expect(page.getByRole('link', { name: 'Agents' })).toHaveAttribute('href', agentsPath);
+
+  await page.getByRole('link', { name: 'Pull requests' }).click();
+  await expect(page).toHaveURL(new RegExp(`${pullRequestsPath}$`));
+  await expect(page.getByRole('heading', { name: `${username}/${repositoryName}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Repository pull request surface' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Agents' }).click();
+  await expect(page).toHaveURL(new RegExp(`${agentsPath}$`));
+  await expect(page.getByRole('heading', { name: `${username}/${repositoryName}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Repository agents surface' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Browser' }).click();
+  await expect(page).toHaveURL(new RegExp(`${browserPath}$`));
+  await expect(page.getByRole('heading', { name: `${username}/${repositoryName}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Repository root' })).toBeVisible();
 });
