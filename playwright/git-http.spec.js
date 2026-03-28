@@ -31,12 +31,33 @@ function execSql(sql) {
   );
 }
 
-function runGit(args, { cwd } = {}) {
+function runGit(args, { cwd, env } = {}) {
   return execFileSync('git', args, {
     cwd,
     encoding: 'utf8',
+    env: env ?? process.env,
     stdio: ['ignore', 'pipe', 'pipe'],
   }).trim();
+}
+
+function runGitFailure(args, { cwd, env } = {}) {
+  try {
+    runGit(args, { cwd, env });
+    return { ok: true, stdout: '', stderr: '' };
+  } catch (error) {
+    return {
+      ok: false,
+      stdout: error.stdout?.toString() ?? '',
+      stderr: error.stderr?.toString() ?? '',
+    };
+  }
+}
+
+function withBasicAuth(baseUrl, username, password) {
+  const url = new URL(baseUrl);
+  url.username = username;
+  url.password = password;
+  return url.toString().replace(/\/$/, '');
 }
 
 function repositoryBarePath(ownerSlug, repositoryName) {
@@ -130,6 +151,49 @@ test('http clone and fetch work against the public repository endpoint', async (
 
     expect(fetchedHead).not.toBe(initialHead);
     expect(runGit(['show', 'origin/main:docs/http-fetch.md'], { cwd: cloneDir })).toContain('fetched over smart http');
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('private http clone requires auth and authenticated push exposes the branch in the web UI', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const email = `repo-http-private-${suffix}@example.com`;
+  const username = `repo-http-private-${suffix}`;
+  const repositoryName = `private-${suffix}`;
+  const password = 'secret123';
+  const branchName = 'feature-http-push';
+  const cloneUrl = `${appBaseUrl}/${username}/${repositoryName}.git`;
+  const authenticatedBaseUrl = withBasicAuth(appBaseUrl, username, password);
+  const authenticatedCloneUrl = `${authenticatedBaseUrl}/${username}/${repositoryName}.git`;
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitwiggum-http-private-'));
+  const cloneDir = path.join(tempRoot, 'repo');
+
+  try {
+    await signUpConfirmAndSignIn(page, { email, username, password });
+    await createRepository(page, {
+      repositoryName,
+      description: 'Private HTTP auth and push smoke test',
+      visibility: 'private',
+    });
+
+    const anonymousProbe = runGitFailure(['ls-remote', cloneUrl], {
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0' },
+    });
+    expect(anonymousProbe.ok).toBe(false);
+
+    runGit(['clone', authenticatedCloneUrl, cloneDir]);
+    runGit(['checkout', '-b', branchName], { cwd: cloneDir });
+    runGit(['config', 'user.name', 'Playwright HTTP Pusher'], { cwd: cloneDir });
+    runGit(['config', 'user.email', 'playwright@example.com'], { cwd: cloneDir });
+    fs.writeFileSync(path.join(cloneDir, 'pushed-over-http.txt'), 'branch pushed over authenticated http\n', 'utf8');
+    runGit(['add', 'pushed-over-http.txt'], { cwd: cloneDir });
+    runGit(['commit', '-m', 'Push over authenticated HTTP'], { cwd: cloneDir });
+    runGit(['push', 'origin', `HEAD:${branchName}`], { cwd: cloneDir });
+
+    await page.goto(`/${username}/${repositoryName}`);
+    const branchSelector = page.locator('.card').filter({ hasText: 'Branch selector' });
+    await expect(branchSelector.getByText(branchName, { exact: true })).toBeVisible();
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }

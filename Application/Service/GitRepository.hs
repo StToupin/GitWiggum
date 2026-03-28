@@ -4,6 +4,7 @@ module Application.Service.GitRepository
     , GitCommitContext (..)
     , GitTreeEntryType (..)
     , cleanupRepositoryOnDisk
+    , enableHttpReceivePackOnDisk
     , initializeRepositoryOnDisk
     , listRepositoryBranches
     , listRepositoryTree
@@ -89,6 +90,7 @@ initializeRepositoryOnDisk owner repository = do
         Exception.throwIO (userError ("Repository already exists on disk at " <> barePath))
 
     runGit Nothing ["init", "--bare", "--initial-branch=" <> cs (get #defaultBranch repository), barePath]
+    runGit Nothing ["--git-dir=" <> barePath, "config", "http.receivepack", "true"]
 
     withSystemTempDirectory "gitwiggum-repository-bootstrap" \tmpDirectory -> do
         let workTreePath = tmpDirectory </> "worktree"
@@ -109,6 +111,12 @@ cleanupRepositoryOnDisk owner repository = do
     barePath <- repositoryBarePath owner repository
     pathExists <- doesPathExist barePath
     when pathExists (removePathForcibly barePath)
+
+enableHttpReceivePackOnDisk :: User -> Repository -> IO ()
+enableHttpReceivePackOnDisk owner repository = do
+    barePath <- repositoryBarePath owner repository
+    _ <- runGit Nothing ["--git-dir=" <> barePath, "config", "http.receivepack", "true"]
+    pure ()
 
 repositoryBarePath :: User -> Repository -> IO FilePath
 repositoryBarePath owner repository = do
