@@ -9,6 +9,7 @@ CREATE TABLE users (
     confirmation_token TEXT DEFAULT NULL,
     password_reset_token TEXT DEFAULT NULL,
     password_reset_token_expires_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
+    ssh_public_key TEXT DEFAULT NULL,
     failed_login_attempts INT DEFAULT 0 NOT NULL,
     locked_at TIMESTAMP WITH TIME ZONE DEFAULT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW() NOT NULL,

@@ -12,6 +12,24 @@ instance AutoRoute SessionsController
 instance AutoRoute PasswordResetsController
 instance AutoRoute DashboardController
 
+instance AutoRoute AccountSettingsController where
+    customRoutes =
+        (do
+            string "/settings/ssh"
+            endOfInput
+            onlyAllowMethods [GET, HEAD]
+            pure AccountSshSettingsAction
+        )
+            <|> (do
+                    string "/settings/ssh"
+                    endOfInput
+                    onlyAllowMethods [POST]
+                    pure UpdateAccountSshSettingsAction
+                )
+
+    customPathTo AccountSshSettingsAction = Just "/settings/ssh"
+    customPathTo UpdateAccountSshSettingsAction = Just "/settings/ssh"
+
 instance AutoRoute GitHttpController where
     customRoutes = do
         onlyAllowMethods [GET, HEAD, POST]

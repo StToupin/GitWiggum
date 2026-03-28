@@ -91,6 +91,9 @@ navigationActions =
             <a class="btn btn-outline-dark btn-sm" href={pathTo DashboardAction} data-posthog-id="nav-dashboard">
                 {(get #username user :: Text)}
             </a>
+            <a class="btn btn-link btn-sm text-decoration-none" href={pathTo AccountSshSettingsAction} data-posthog-id="nav-settings">
+                Settings
+            </a>
             <a class="btn btn-dark btn-sm" href={pathTo LogoutAction} data-posthog-id="nav-sign-out">
                 Sign out
             </a>
