@@ -30,6 +30,8 @@ data SessionsController
 data PasswordResetsController
     = NewPasswordResetAction
     | CreatePasswordResetAction
+    | EditPasswordResetAction { userId :: !(Id User), passwordResetToken :: !Text }
+    | UpdatePasswordResetAction { userId :: !(Id User), passwordResetToken :: !Text }
     deriving (Eq, Show, Data)
 
 data DashboardController

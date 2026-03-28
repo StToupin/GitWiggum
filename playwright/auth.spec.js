@@ -23,6 +23,10 @@ function decodeQuotedPrintable(text) {
     .replace(/=([0-9A-F]{2})/gi, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
+function extractFirstUrl(text) {
+  return (text.match(/https?:\/\/[^\s<"]+/) || [])[0]?.replace(/&amp;/g, '&');
+}
+
 test('auth schema boot smoke', async ({ page }) => {
   await page.goto('/');
   await expect(page.getByRole('heading', { name: /Review pull requests/i })).toBeVisible();
@@ -65,7 +69,7 @@ test('confirm account activates the user', async ({ page }) => {
   });
 
   const body = decodeQuotedPrintable(message.Content?.Body || '');
-  const confirmationUrl = (body.match(/https?:\/\/[^\s<"]+/) || [])[0]?.replace(/&amp;/g, '&');
+  const confirmationUrl = extractFirstUrl(body);
 
   expect(confirmationUrl).toBeTruthy();
 
@@ -101,7 +105,7 @@ test('sign in and sign out work for confirmed users', async ({ page }) => {
     subjectIncludes: 'Confirm your GitWiggum account',
   });
   const body = decodeQuotedPrintable(message.Content?.Body || '');
-  const confirmationUrl = (body.match(/https?:\/\/[^\s<"]+/) || [])[0]?.replace(/&amp;/g, '&');
+  const confirmationUrl = extractFirstUrl(body);
 
   expect(confirmationUrl).toBeTruthy();
 
@@ -156,4 +160,66 @@ test('password reset request sends a generic response and stores a reset token',
   await page.getByLabel('Email').fill(`missing-${suffix}@example.com`);
   await page.getByRole('button', { name: 'Send reset link' }).click();
   await expect(page.getByText('If an account exists for that email, we sent a password reset link.')).toBeVisible();
+});
+
+test('password reset completion updates the password and invalidates the token', async ({ page }) => {
+  await clearMailhogMessages();
+
+  const suffix = `${Date.now().toString(36)}-reset-complete`;
+  const email = `auth-${suffix}@example.com`;
+  const username = `auth-${suffix}`;
+  const originalPassword = 'secret123';
+  const newPassword = 'fresher123';
+
+  await page.goto('/NewRegistration');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Username').fill(username);
+  await page.getByLabel('Password').fill(originalPassword);
+  await page.getByRole('button', { name: 'Create account' }).click();
+  await expect(page.getByText('Account created. Confirm your email before signing in.')).toBeVisible();
+
+  const confirmationMessage = await waitForMailhogMessage({
+    to: email,
+    subjectIncludes: 'Confirm your GitWiggum account',
+  });
+  const confirmationUrl = extractFirstUrl(decodeQuotedPrintable(confirmationMessage.Content?.Body || ''));
+
+  expect(confirmationUrl).toBeTruthy();
+
+  await page.goto(confirmationUrl);
+  await expect(page.getByText('Your account has been confirmed')).toBeVisible();
+
+  await clearMailhogMessages();
+
+  await page.goto('/NewPasswordReset');
+  await page.getByLabel('Email').fill(email);
+  await page.getByRole('button', { name: 'Send reset link' }).click();
+  await expect(page.getByText('If an account exists for that email, we sent a password reset link.')).toBeVisible();
+
+  const resetMessage = await waitForMailhogMessage({
+    to: email,
+    subjectIncludes: 'Reset your GitWiggum password',
+  });
+  const resetBody = decodeQuotedPrintable(resetMessage.Content?.Body || '');
+  const resetUrl = extractFirstUrl(resetBody);
+
+  expect(resetUrl).toBeTruthy();
+
+  await page.goto(resetUrl);
+  await page.getByLabel('New password').fill(newPassword);
+  await page.getByRole('button', { name: 'Update password' }).click();
+  await expect(page.getByText('Your password has been reset. Sign in with your new password.')).toBeVisible();
+
+  await page.goto('/NewSession');
+  await page.getByLabel('Email').fill(email);
+  await page.getByLabel('Password').fill(originalPassword);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByText('Invalid email or password.')).toBeVisible();
+
+  await page.getByLabel('Password').fill(newPassword);
+  await page.getByRole('button', { name: 'Sign in' }).click();
+  await expect(page.getByRole('heading', { name: new RegExp(`Signed in as ${username}`, 'i') })).toBeVisible();
+
+  await page.goto(resetUrl);
+  await expect(page.getByText('This password reset link is invalid or expired.')).toBeVisible();
 });
