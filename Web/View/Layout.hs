@@ -1,0 +1,102 @@
+module Web.View.Layout (defaultLayout, Html) where
+
+import IHP.ViewPrelude
+import IHP.Environment
+import Generated.Types
+import Web.Types
+import Web.Routes
+import Application.Helper.View
+
+defaultLayout :: Html -> Html
+defaultLayout inner = [hsx|
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        {metaTags}
+
+        {stylesheets}
+        {scripts}
+
+        <title>{pageTitleOrDefault "GitWiggum"}</title>
+    </head>
+    <body class="gitwiggum-app-shell">
+        <nav class="navbar navbar-expand-lg border-bottom bg-white">
+            <div class="container">
+                <a class="navbar-brand fw-semibold" href={pathTo HomeAction}>
+                    GitWiggum
+                </a>
+                <div class="ms-auto d-flex align-items-center gap-3">
+                    {navigationActions}
+                </div>
+            </div>
+        </nav>
+        <main class="py-4 py-lg-5">
+            <div class="container">
+                {renderFlashMessages}
+                {inner}
+            </div>
+        </main>
+    </body>
+</html>
+|]
+
+-- The 'assetPath' function used below appends a `?v=SOME_VERSION` to the static assets in production
+-- This is useful to avoid users having old CSS and JS files in their browser cache once a new version is deployed
+-- See https://ihp.digitallyinduced.com/Guide/assets.html for more details
+
+stylesheets :: Html
+stylesheets = [hsx|
+        <link rel="stylesheet" href={assetPath "/vendor/bootstrap-5.3.8/bootstrap.min.css"}/>
+        <link rel="stylesheet" href={assetPath "/vendor/flatpickr.min.css"}/>
+        <link rel="stylesheet" href={assetPath "/app.css"}/>
+    |]
+
+scripts :: Html
+scripts = [hsx|
+        {when isDevelopment devScripts}
+        <script src={assetPath "/vendor/htmx.min.js"}></script>
+        <script src={assetPath "/vendor/morphdom-umd.min.js"}></script>
+        <script src={assetPath "/helpers-htmx.js"}></script>
+        <script src={assetPath "/htmx-instant-click.js"}></script>
+        <script src={assetPath "/ihp-auto-refresh-htmx.js"}></script>
+        <script src={assetPath "/auth-signup.js"}></script>
+    |]
+
+devScripts :: Html
+devScripts = [hsx|
+        <script id="livereload-script" src={assetPath "/livereload.js"} data-ws={liveReloadWebsocketUrl}></script>
+    |]
+
+metaTags :: Html
+metaTags = [hsx|
+    <meta charset="utf-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
+    <meta property="og:title" content="App"/>
+    <meta property="og:type" content="website"/>
+    <meta property="og:url" content="TODO"/>
+    <meta property="og:description" content="TODO"/>
+    {autoRefreshMeta}
+|]
+
+navigationActions :: Html
+navigationActions =
+    case (currentUserOrNothing :: Maybe User) of
+        Just user -> [hsx|
+            <a class="btn btn-outline-dark btn-sm" href={pathTo DashboardAction} data-posthog-id="nav-dashboard">
+                {(get #username user :: Text)}
+            </a>
+            <a class="btn btn-link btn-sm text-decoration-none" href={pathTo AccountSshSettingsAction} data-posthog-id="nav-settings">
+                Settings
+            </a>
+            <a class="btn btn-dark btn-sm" href={pathTo LogoutAction} data-posthog-id="nav-sign-out">
+                Sign out
+            </a>
+        |]
+        Nothing -> [hsx|
+            <a class="btn btn-link btn-sm text-decoration-none" href={pathTo NewSessionAction} data-posthog-id="nav-sign-in">
+                Sign in
+            </a>
+            <a class="btn btn-outline-dark btn-sm" href={pathTo NewRegistrationAction} data-posthog-id="nav-sign-up">
+                Sign up
+            </a>
+        |]

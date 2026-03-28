@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="en" class="min-h-dvh">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>403 – Access Denied</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
+    />
+    <style>
+      :root {
+        --gitWiggum-error-bg: #0d1117;
+        --gitWiggum-error-surface: rgba(6, 11, 21, 0.8);
+        --gitWiggum-error-border: rgba(255, 255, 255, 0.08);
+        --gitWiggum-error-muted: #98a2b3;
+      }
+
+      html,
+      body {
+        min-height: 100%;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top left, rgba(239, 68, 68, 0.18), transparent 30%),
+          radial-gradient(circle at top right, rgba(245, 158, 11, 0.16), transparent 24%),
+          linear-gradient(180deg, #111827 0%, var(--gitWiggum-error-bg) 50%, #090c10 100%);
+        color: #f8fafc;
+        font-family: "Manrope", "Segoe UI", sans-serif;
+      }
+
+      .gitWiggum-error-shell {
+        min-height: 100dvh;
+        padding: clamp(0.75rem, 2vw, 1.5rem);
+      }
+
+      .gitWiggum-error-card {
+        min-height: calc(100dvh - clamp(1.5rem, 4vw, 3rem));
+        background: var(--gitWiggum-error-surface);
+        border: 1px solid var(--gitWiggum-error-border);
+        border-radius: 2rem;
+        box-shadow: 0 2rem 5rem rgba(0, 0, 0, 0.32);
+        overflow: hidden;
+      }
+
+      .gitWiggum-error-copy {
+        max-width: 42rem;
+      }
+
+      .gitWiggum-error-kicker {
+        color: #fb7185;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+      }
+
+      .gitWiggum-error-lead {
+        color: var(--gitWiggum-error-muted);
+      }
+
+      .gitWiggum-error-primary {
+        background: #f59e0b;
+        border-color: #f59e0b;
+        color: #16181d;
+        font-weight: 600;
+      }
+
+      .gitWiggum-error-primary:hover,
+      .gitWiggum-error-primary:focus {
+        background: #fbbf24;
+        border-color: #fbbf24;
+        color: #16181d;
+      }
+
+      .gitWiggum-error-secondary {
+        background: rgba(255, 255, 255, 0.06);
+        border-color: rgba(255, 255, 255, 0.12);
+        color: #f8fafc;
+      }
+
+      .gitWiggum-error-secondary:hover,
+      .gitWiggum-error-secondary:focus {
+        background: rgba(255, 255, 255, 0.12);
+        border-color: rgba(255, 255, 255, 0.18);
+        color: #ffffff;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="gitWiggum-error-shell d-flex align-items-center justify-content-center">
+      <div class="gitWiggum-error-card container-fluid px-4 px-lg-5 py-5">
+        <div class="row g-5 align-items-center justify-content-center h-100">
+          <div class="col-12 col-xl-5 text-center">
+          <svg
+            role="img"
+            aria-label="Friendly angry marmot"
+            viewBox="0 0 300 300"
+            class="img-fluid"
+            style="max-width: 22rem; filter: drop-shadow(0 1.4rem 2rem rgba(0, 0, 0, 0.26));"
+          >
+            <defs>
+              <linearGradient id="fur2" x1="0" x2="1" y1="0" y2="1">
+                <stop offset="0%" stop-color="#b8895e" />
+                <stop offset="100%" stop-color="#94633a" />
+              </linearGradient>
+              <linearGradient id="belly2" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stop-color="#f1dfc9" />
+                <stop offset="100%" stop-color="#e4cdb2" />
+              </linearGradient>
+            </defs>
+            <ellipse cx="150" cy="240" rx="75" ry="14" fill="#000" opacity="0.06" />
+            <ellipse cx="150" cy="160" rx="90" ry="105" fill="url(#fur2)" />
+            <ellipse cx="150" cy="185" rx="55" ry="70" fill="url(#belly2)" />
+            <circle cx="98" cy="67" r="18" fill="#94633a" />
+            <circle cx="202" cy="67" r="18" fill="#94633a" />
+            <ellipse cx="150" cy="95" rx="70" ry="55" fill="url(#fur2)" />
+            <circle cx="128" cy="95" r="10" fill="#fff" />
+            <circle cx="172" cy="95" r="10" fill="#fff" />
+            <circle cx="126" cy="95" r="4.5" fill="#111827" />
+            <circle cx="170" cy="95" r="4.5" fill="#111827" />
+            <path d="M110 86 q20 -18 35 -4" stroke="#6b4426" stroke-width="6" fill="none" stroke-linecap="round" />
+            <path d="M155 82 q18 10 34 0" stroke="#6b4426" stroke-width="6" fill="none" stroke-linecap="round" />
+            <ellipse cx="150" cy="112" rx="12" ry="8" fill="#3f3d56" />
+            <path d="M150 120 v10" stroke="#3f3d56" stroke-width="3" stroke-linecap="round" />
+            <rect x="143" y="128" width="6" height="12" rx="2" fill="#fff" />
+            <rect x="151" y="128" width="6" height="12" rx="2" fill="#fff" />
+            <ellipse cx="95" cy="175" rx="22" ry="18" fill="#94633a" />
+            <g transform="translate(0,-8)">
+              <ellipse cx="205" cy="175" rx="22" ry="18" fill="#94633a" />
+              <path d="M194 172 q6 6 0 12" stroke="#6b4426" stroke-width="3" stroke-linecap="round" />
+              <path d="M199 170 q6 6 0 12" stroke="#6b4426" stroke-width="3" stroke-linecap="round" />
+              <path d="M204 168 q6 6 0 12" stroke="#6b4426" stroke-width="3" stroke-linecap="round" />
+            </g>
+            <g transform="translate(32,148)">
+              <polygon points="30,0 60,30 30,60 0,30" fill="#ef4444" />
+              <text x="30" y="38" text-anchor="middle" font-size="26" font-family="ui-sans-serif, system-ui, -apple-system" fill="#fff">!</text>
+            </g>
+          </svg>
+          </div>
+          <div class="col-12 col-xl-7 d-flex justify-content-center justify-content-xl-start">
+            <div class="gitWiggum-error-copy text-center text-xl-start">
+              <p class="gitWiggum-error-kicker mb-3">Error 403</p>
+              <h1 class="display-3 fw-bold mb-3">Access Denied</h1>
+              <p class="gitWiggum-error-lead fs-5 mb-0">
+                You don’t have permission to view this page. If you think this is a mistake, try signing in or contact support.
+              </p>
+              <div class="d-flex flex-column flex-sm-row align-items-center justify-content-center justify-content-xl-start gap-3 mt-4">
+                <a href="/" class="btn gitWiggum-error-primary px-4 py-2" data-posthog-id="error-403-go-home">Go to Homepage</a>
+                <a href="/NewSession" class="btn gitWiggum-error-secondary px-4 py-2" data-posthog-id="error-403-sign-in">Sign In</a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </body>
+</html>

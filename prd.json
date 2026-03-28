@@ -1,0 +1,1153 @@
+{
+  "project": "GitWigum",
+  "branchName": "feat/ralph-gitwigum-core",
+  "description": "GitWigum - an AI-first GitHub-style git collaboration app built with IHP, local jobs, local Codex CLI execution, lightweight OpenAI diff explanations, Playwright verification, and HTTP/SSH git transport.",
+  "productSummary": [
+    "Build a minimal but coherent GitWigum product, not a generic code hosting platform.",
+    "The product should let users authenticate, create repositories, browse code, open pull requests, ask AI about diff lines, ask AI to implement repo prompts as draft pull requests, capture AI provenance locally, and use standard git over HTTP and SSH.",
+    "All execution should stay local-first: IHP web app, IHP jobs, local git repositories, local working clones, and Codex CLI launched as a local subprocess from jobs.",
+    "The files tab on pull requests is the main review surface, and AI provenance should be first-class in both commit and diff UI."
+  ],
+  "scope": [
+    "Email/password authentication with confirmation and password reset",
+    "Signed-in repository dashboard and create-repository flow",
+    "Canonical owner/repository routes shaped like /:owner/:repo",
+    "Repository shell with browser, pull requests, and agents navigation",
+    "Repository browser with branch switching, folder navigation, file preview, and lightweight commit context",
+    "Pull request list and detail pages with conversation, commits, and files routes",
+    "Merge-base-based pull request diff rendering that remains correct after compare-branch rebases",
+    "Inline Ask AI on a pull request diff line with persisted responses and dismiss state",
+    "Repository-level prompt-to-draft-PR flow powered by a local Codex CLI job",
+    "rgh CLI auth, repo surfaces, PR surfaces, and AI context capture",
+    "Commit and pull request UI provenance for captured AI metadata",
+    "Git transport over HTTP and SSH",
+    "Persistent job state and visible job status for both async AI flows",
+    "Playwright verification for every UI-facing story"
+  ],
+  "nonGoals": [
+    "Remote runners or serverless execution",
+    "Scaleway or any remote worker platform",
+    "Advanced enterprise security hardening",
+    "Fine-grained enterprise permissions",
+    "Generic DevOps platform features",
+    "Workflow engines unrelated to the core GitWigum experience",
+    "Browser IDE behavior or full in-browser editing",
+    "Marketplace or social coding features",
+    "Visible update branch or auto rebase product features"
+  ],
+  "keyUserJourneys": [
+    {
+      "id": "J-001",
+      "title": "New user signs up and creates a repository",
+      "steps": [
+        "User signs up with email and password.",
+        "User confirms their email from a transactional email.",
+        "User signs in and lands on the dashboard.",
+        "User creates a repository under their personal owner namespace.",
+        "User lands on the canonical /:owner/:repo route."
+      ]
+    },
+    {
+      "id": "J-002",
+      "title": "User browses repository contents",
+      "steps": [
+        "User opens a repository browser page.",
+        "User switches branches.",
+        "User clicks through folders.",
+        "User opens a file preview.",
+        "User can always tell which branch and path are selected."
+      ]
+    },
+    {
+      "id": "J-003",
+      "title": "Developer uses normal git and opens a pull request",
+      "steps": [
+        "Developer clones the repository over HTTP or SSH.",
+        "Developer creates and pushes a branch.",
+        "The branch becomes visible in the web UI.",
+        "Developer opens a pull request from the pushed branch.",
+        "Reviewer opens the pull request and uses the files tab as the main review surface."
+      ]
+    },
+    {
+      "id": "J-004",
+      "title": "Reviewer asks AI about a diff line",
+      "steps": [
+        "Reviewer opens the pull request files route.",
+        "Reviewer clicks Ask AI on one diff line.",
+        "The UI shows an inline loading panel at that exact location.",
+        "The explanation appears inline and persists on reload.",
+        "The reviewer dismisses the explanation and the dismissed state persists."
+      ]
+    },
+    {
+      "id": "J-005",
+      "title": "Maintainer asks AI to implement a prompt as a draft pull request",
+      "steps": [
+        "Maintainer opens the repository Agents page.",
+        "Maintainer submits a repository-level prompt and optionally title, description, and base branch.",
+        "The app immediately creates a compare branch and draft pull request.",
+        "A local IHP job runs Codex CLI in a local working clone.",
+        "The job commits text-file changes, pushes the branch, and updates the draft pull request status."
+      ]
+    },
+    {
+      "id": "J-006",
+      "title": "Developer captures local AI provenance and sees it in the UI",
+      "steps": [
+        "Developer runs rgh auth login and installs hooks.",
+        "Developer works in Codex, Claude Code, or Cursor.",
+        "Developer creates a commit in the repository.",
+        "rgh captures repository-relevant AI context and attaches it to the commit.",
+        "Commit detail UI and pull request file UI expose the captured provenance."
+      ]
+    }
+  ],
+  "technicalAssumptions": [
+    "Backend and web app use IHP + Haskell.",
+    "Background work uses local IHP jobs only.",
+    "Prompt-to-PR jobs run Codex CLI directly as a local subprocess from the job worker.",
+    "Inline diff explanations use a lightweight OpenAI model call.",
+    "Repository storage is local bare git repositories on disk.",
+    "Background jobs create disposable local working clones from the bare repository.",
+    "Canonical owner namespace can reuse the existing organizations model with a personal owner row per user.",
+    "Repository creation can default to the current user's personal owner namespace for MVP.",
+    "Canonical routes should be page-like and use dedicated paths for tabs rather than ?tab= query params.",
+    "Pull request diffs must be computed from the live merge base between base branch and compare branch.",
+    "No visible update branch or auto rebase UI should be introduced for MVP.",
+    "HTTP git can be implemented as a thin wrapper around git-http-backend or an equivalent local process contract.",
+    "SSH git can be implemented as a thin authenticated command surface around git-upload-pack and git-receive-pack.",
+    "The source of truth for AI provenance can remain git metadata or trailers, but the web app may index it into a table for faster lookup.",
+    "Prompt-to-PR is always repository-level and always creates a new draft pull request rather than editing an existing pull request in place."
+  ],
+  "verificationRequirements": [
+    "Use direnv exec . devenv up as the source of truth that the app boots and compiles.",
+    "Do not use cabal build exe:App as the primary compile verification step.",
+    "Every UI-facing story must have focused Playwright coverage.",
+    "Use direnv exec . npm run test:playwright -- playwright/<spec>.js --grep \"<story name>\" for focused verification.",
+    "If Playwright dependencies or browsers are missing, run direnv exec . npm ci and direnv exec . ./scripts/ensure-playwright-browsers.sh.",
+    "Git transport stories must include real shell smoke tests with git clone, fetch, and push.",
+    "CLI stories must include scripts/gitWiggum rgh build and targeted CLI smoke checks.",
+    "If fixture assumptions change, update the fixture and rerun direnv exec . ./fixture.sh.",
+    "Broken code must not be committed.",
+    "If App-test fails only because of the existing wai-request-params dependency issue while devenv up and targeted checks pass, treat that as a pre-existing suite issue rather than a story regression."
+  ],
+  "sequencedImplementationPlan": [
+    {
+      "phase": 1,
+      "title": "Auth and owner foundation",
+      "goal": "Users can sign up, confirm, sign in, reset passwords, and get a personal owner namespace.",
+      "storyIds": [
+        "AUTH-001",
+        "AUTH-002",
+        "AUTH-003",
+        "AUTH-004",
+        "AUTH-005",
+        "AUTH-006",
+        "REPO-001"
+      ]
+    },
+    {
+      "phase": 2,
+      "title": "Repository creation and browser",
+      "goal": "Users can create repositories, land on canonical routes, and browse branches, folders, and files.",
+      "storyIds": [
+        "REPO-002",
+        "REPO-003",
+        "REPO-004",
+        "REPO-005",
+        "BROWSER-001",
+        "BROWSER-002",
+        "BROWSER-003",
+        "BROWSER-004"
+      ]
+    },
+    {
+      "phase": 3,
+      "title": "Git transport and pull requests",
+      "goal": "Real git clients can clone, fetch, push, and open pull requests whose diffs are merge-base correct.",
+      "storyIds": [
+        "GIT-001",
+        "GIT-002",
+        "GIT-003",
+        "GIT-004",
+        "PR-001",
+        "PR-002",
+        "PR-003",
+        "PR-004",
+        "PR-005",
+        "PR-006"
+      ]
+    },
+    {
+      "phase": 4,
+      "title": "Ask AI on a diff line",
+      "goal": "Reviewers can request inline explanations on PR diff lines and see persisted results.",
+      "storyIds": [
+        "DIFFAI-001",
+        "DIFFAI-002",
+        "DIFFAI-003",
+        "DIFFAI-004"
+      ]
+    },
+    {
+      "phase": 5,
+      "title": "Prompt to draft pull request",
+      "goal": "Repository-level prompts create immediate draft PRs whose work is completed by a local Codex job.",
+      "storyIds": [
+        "AGENT-001",
+        "AGENT-002",
+        "AGENT-003",
+        "AGENT-004",
+        "AGENT-005"
+      ]
+    },
+    {
+      "phase": 6,
+      "title": "CLI and provenance",
+      "goal": "rgh can authenticate, inspect repos and PRs, capture local AI context, attach metadata to commits, and surface that provenance in the web UI.",
+      "storyIds": [
+        "CLI-001",
+        "CLI-002",
+        "CLI-003",
+        "CAPTURE-001",
+        "CAPTURE-002",
+        "PROV-001",
+        "PROV-002"
+      ]
+    }
+  ],
+  "storySlicingGuidance": [
+    "Prefer 15 to 30 minute stories.",
+    "Each story should fit in one fresh-context Ralph iteration.",
+    "Split schema, routes, page chrome, background jobs, CLI work, and Playwright coverage into separate stories when that keeps the unit small.",
+    "Do not combine unrelated behavior changes just because they touch the same files.",
+    "Do not postpone verification to the end of a milestone.",
+    "When a story starts feeling like schema plus UI plus async execution plus CLI all at once, split it immediately."
+  ],
+  "suggestedFirstRun": [
+    "AUTH-001",
+    "AUTH-002",
+    "AUTH-003",
+    "AUTH-004",
+    "REPO-001",
+    "REPO-002",
+    "REPO-003",
+    "REPO-004",
+    "REPO-005",
+    "BROWSER-001"
+  ],
+  "userStories": [
+    {
+      "id": "AUTH-001",
+      "title": "Add or verify auth fields needed for confirmation and reset",
+      "description": "As a developer, I need minimal user fields for email confirmation and password reset so the account lifecycle works without adding enterprise auth complexity.",
+      "dependencies": [],
+      "acceptanceCriteria": [
+        "Users schema supports email confirmation with is_confirmed and confirmation token fields.",
+        "Users schema supports password reset with reset token and expiry fields.",
+        "Migration is forward-only and the app still boots under devenv."
+      ],
+      "verification": [
+        "Run direnv exec . devenv up.",
+        "If schema changes, apply the migration and verify the boot succeeds cleanly.",
+        "Do not rely on cabal build exe:App as the primary compile signal."
+      ],
+      "priority": 1,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUTH-002",
+      "title": "Build sign-up page and create-account action",
+      "description": "As a visitor, I want to create an account with email and password so I can start using the app.",
+      "dependencies": [
+        "AUTH-001"
+      ],
+      "acceptanceCriteria": [
+        "Signed-out users can open a sign-up page.",
+        "Submitting email, username, and password creates an inactive user record.",
+        "Success UI clearly tells the user to confirm their email before using the account."
+      ],
+      "verification": [
+        "Add or update playwright/auth.spec.js coverage for sign up.",
+        "Run direnv exec . npm run test:playwright -- playwright/auth.spec.js --grep \"sign up\".",
+        "Run direnv exec . devenv up."
+      ],
+      "priority": 2,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUTH-003",
+      "title": "Send confirmation email and activate accounts",
+      "description": "As a new user, I need a confirmation email so my account becomes active only after I verify my email address.",
+      "dependencies": [
+        "AUTH-002"
+      ],
+      "acceptanceCriteria": [
+        "Sign-up sends a transactional confirmation email.",
+        "The email includes a working confirmation link.",
+        "Visiting the link marks the account as confirmed."
+      ],
+      "verification": [
+        "Use MailHog or the repo mail helper in Playwright.",
+        "Run direnv exec . npm run test:playwright -- playwright/auth.spec.js --grep \"confirm account\".",
+        "Run direnv exec . devenv up."
+      ],
+      "priority": 3,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUTH-004",
+      "title": "Build sign-in and sign-out flows",
+      "description": "As a confirmed user, I want to sign in and out with email and password so I can access my repositories safely.",
+      "dependencies": [
+        "AUTH-003"
+      ],
+      "acceptanceCriteria": [
+        "Confirmed users can sign in with email and password.",
+        "Unconfirmed users cannot use the app as active users.",
+        "Signed-in users can sign out cleanly and session state updates the navigation."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/auth.spec.js --grep \"sign in|sign out\".",
+        "Run direnv exec . devenv up.",
+        "Confirm the signed-in redirect lands on the dashboard or the expected signed-in page."
+      ],
+      "priority": 4,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUTH-005",
+      "title": "Add password reset request flow",
+      "description": "As a user who forgot my password, I want to request a reset link so I can regain access.",
+      "dependencies": [
+        "AUTH-001"
+      ],
+      "acceptanceCriteria": [
+        "Signed-out users can request a password reset by email.",
+        "The system generates a reset token and expiry.",
+        "A reset email is sent without leaking whether the address exists."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/auth.spec.js --grep \"password reset request\".",
+        "Run direnv exec . devenv up.",
+        "Verify the email contents through MailHog or the existing mail helpers."
+      ],
+      "priority": 5,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AUTH-006",
+      "title": "Add password reset completion form",
+      "description": "As a user with a valid reset link, I want to set a new password so I can sign in again.",
+      "dependencies": [
+        "AUTH-005"
+      ],
+      "acceptanceCriteria": [
+        "Reset link opens a form that accepts a new password.",
+        "Successful reset invalidates the token.",
+        "User can sign in with the new password afterward."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/auth.spec.js --grep \"password reset completion\".",
+        "Run direnv exec . devenv up.",
+        "Verify the old token no longer works after reset."
+      ],
+      "priority": 6,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "REPO-001",
+      "title": "Create a personal owner namespace for each user",
+      "description": "As the product, I need every user to have a stable owner namespace so canonical owner/repository routes work without a full organization product.",
+      "dependencies": [
+        "AUTH-002"
+      ],
+      "acceptanceCriteria": [
+        "New users get a personal owner namespace automatically.",
+        "The owner slug is stable and suitable for canonical routes.",
+        "Repository creation can default to this owner without an owner picker."
+      ],
+      "verification": [
+        "Add or update a focused auth or repositories Playwright assertion for personal owner creation.",
+        "Run the focused Playwright grep.",
+        "Run direnv exec . devenv up."
+      ],
+      "priority": 7,
+      "estimateMinutes": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "REPO-002",
+      "title": "Build the signed-in repository dashboard",
+      "description": "As a signed-in user, I want a dashboard that lists visible repositories so I can quickly open or create a repository.",
+      "dependencies": [
+        "AUTH-004",
+        "REPO-001"
+      ],
+      "acceptanceCriteria": [
+        "Signed-in users land on a dashboard that lists visible repositories.",
+        "The empty state is clear when there are no repositories.",
+        "The dashboard includes a create-repository CTA."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/repositories.spec.js --grep \"dashboard list\".",
+        "Run direnv exec . devenv up.",
+        "Verify the dashboard route only shows signed-in content."
+      ],
+      "priority": 8,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "REPO-003",
+      "title": "Add create-repository page and action",
+      "description": "As a user, I want to create a repository so I can start working in the product immediately after signing in.",
+      "dependencies": [
+        "REPO-002"
+      ],
+      "acceptanceCriteria": [
+        "User can open a create-repository page.",
+        "User can create a repository with name, optional description, and visibility.",
+        "Success redirects to the canonical repository route."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/repositories.spec.js --grep \"create repository\".",
+        "Run direnv exec . devenv up.",
+        "Verify the repository appears back on the dashboard list."
+      ],
+      "priority": 9,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "REPO-004",
+      "title": "Initialize a bare repository with a default branch and initial commit",
+      "description": "As the backend, I need each created repository to become a real git repository so the browser, clone flows, and pull requests all have real git state to work with.",
+      "dependencies": [
+        "REPO-003"
+      ],
+      "acceptanceCriteria": [
+        "Repository creation writes a bare git repository on local disk.",
+        "The repository has a default branch, preferably main.",
+        "The repository has an initial README commit so the browser is non-empty."
+      ],
+      "verification": [
+        "Run direnv exec . devenv up.",
+        "Extend the repository create Playwright flow to assert the repo opens with content.",
+        "Verify latest_commit_sha or equivalent metadata is populated."
+      ],
+      "priority": 10,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "REPO-005",
+      "title": "Add canonical owner/repository route and repository shell",
+      "description": "As a user, I want repository pages to live under /:owner/:repo so the product feels like a real git collaboration app.",
+      "dependencies": [
+        "REPO-004"
+      ],
+      "acceptanceCriteria": [
+        "Canonical repository route is /:owner/:repo.",
+        "Repository shell includes navigation to browser, pull requests, and agents.",
+        "The shell resolves repository context from owner slug and repository slug."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/repositories.spec.js --grep \"canonical route|repository shell\".",
+        "Run direnv exec . devenv up.",
+        "Verify the shell links preserve repository context."
+      ],
+      "priority": 11,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BROWSER-001",
+      "title": "Add repository browser route for branch root",
+      "description": "As a user, I want the repository root to show branch and path context so I can start browsing code immediately.",
+      "dependencies": [
+        "REPO-005"
+      ],
+      "acceptanceCriteria": [
+        "Opening the browser route shows the default branch root.",
+        "The page clearly displays the selected branch.",
+        "The page clearly displays the current path."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/repositories.spec.js --grep \"browser root\".",
+        "Run direnv exec . devenv up.",
+        "Verify the route is page-like rather than a tab query param."
+      ],
+      "priority": 12,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BROWSER-002",
+      "title": "Render the directory explorer for a selected branch and path",
+      "description": "As a user, I want to click through folders so I can inspect repository contents without leaving the browser page.",
+      "dependencies": [
+        "BROWSER-001"
+      ],
+      "acceptanceCriteria": [
+        "Directory listing is read from the selected branch and path.",
+        "Clicking a folder updates the route and re-renders contents.",
+        "Folder navigation does not require an IDE-style editor surface."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/repositories.spec.js --grep \"browse folders\".",
+        "Run direnv exec . devenv up.",
+        "Verify nested folders open correctly on a seeded repository."
+      ],
+      "priority": 13,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BROWSER-003",
+      "title": "Add the branch selector",
+      "description": "As a user, I want to switch branches in the browser so I can inspect repository contents across refs.",
+      "dependencies": [
+        "BROWSER-001"
+      ],
+      "acceptanceCriteria": [
+        "Browser shows available branches.",
+        "Selecting a branch updates the route.",
+        "Tree and file content reflect the selected branch."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/repositories.spec.js --grep \"switch branch\".",
+        "Run direnv exec . devenv up.",
+        "Verify a branch change alters visible content on a seeded repo."
+      ],
+      "priority": 14,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "BROWSER-004",
+      "title": "Add file preview with lightweight commit context",
+      "description": "As a user, I want to open a file and read it from the selected branch without turning the page into a browser IDE.",
+      "dependencies": [
+        "BROWSER-002",
+        "BROWSER-003"
+      ],
+      "acceptanceCriteria": [
+        "Clicking a file opens a preview pane or page section.",
+        "Preview content is read from the selected branch and path.",
+        "The browser shows lightweight latest commit context where useful."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/repositories.spec.js --grep \"preview file\".",
+        "Run direnv exec . devenv up.",
+        "Verify branch changes update the preview content."
+      ],
+      "priority": 15,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "GIT-001",
+      "title": "Add HTTP clone and fetch read path",
+      "description": "As a developer, I need a real HTTP git endpoint so I can clone and fetch repositories with a normal git client.",
+      "dependencies": [
+        "REPO-004"
+      ],
+      "acceptanceCriteria": [
+        "A real git client can clone a public repository over HTTP.",
+        "A real git client can fetch updates over HTTP.",
+        "Implementation stays a thin wrapper around standard git HTTP behavior."
+      ],
+      "verification": [
+        "Run direnv exec . devenv up.",
+        "Run a real git clone against the local HTTP endpoint.",
+        "Fetch again after a new commit exists to verify incremental behavior."
+      ],
+      "priority": 16,
+      "estimateMinutes": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "GIT-002",
+      "title": "Add HTTP auth for private clone and push",
+      "description": "As a repository owner, I need private HTTP git access and authenticated push so real repository collaboration works.",
+      "dependencies": [
+        "GIT-001",
+        "AUTH-004"
+      ],
+      "acceptanceCriteria": [
+        "Private repositories require auth for HTTP clone and fetch.",
+        "Push over HTTP authenticates the user correctly.",
+        "Successful push updates the bare repository refs."
+      ],
+      "verification": [
+        "Run direnv exec . devenv up.",
+        "Smoke test private HTTP clone with valid credentials.",
+        "Push a branch over HTTP and verify the branch appears in the web app."
+      ],
+      "priority": 17,
+      "estimateMinutes": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "GIT-003",
+      "title": "Add minimal SSH key settings",
+      "description": "As a user, I want to store an SSH public key so I can use SSH git transport without a larger account-management feature set.",
+      "dependencies": [
+        "AUTH-004"
+      ],
+      "acceptanceCriteria": [
+        "Signed-in users can save an SSH public key.",
+        "The product stores enough key material for SSH authentication.",
+        "The UI clearly shows whether a key is configured."
+      ],
+      "verification": [
+        "Add or update a focused account-settings Playwright flow if needed.",
+        "Run the focused Playwright grep.",
+        "Run direnv exec . devenv up."
+      ],
+      "priority": 18,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "GIT-004",
+      "title": "Add SSH clone, fetch, and push transport",
+      "description": "As a developer, I want standard SSH git access so the app feels like a real git host and works with normal SSH workflows.",
+      "dependencies": [
+        "GIT-003",
+        "REPO-004"
+      ],
+      "acceptanceCriteria": [
+        "A real git client can clone over SSH.",
+        "A real git client can fetch over SSH.",
+        "A real git client can push over SSH and the web app sees the new branch."
+      ],
+      "verification": [
+        "Run direnv exec . devenv up.",
+        "Run the local SSH clone smoke test.",
+        "Push a branch over SSH and verify it appears in the PR creation UI."
+      ],
+      "priority": 19,
+      "estimateMinutes": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "PR-001",
+      "title": "Add minimal pull request schema and create action",
+      "description": "As a developer, I need a real pull request model so pushed branches can be reviewed in the web app.",
+      "dependencies": [
+        "REPO-005"
+      ],
+      "acceptanceCriteria": [
+        "Pull requests store repository, number, title, description, base branch, compare branch, author, state, and draft flag.",
+        "Users can create a pull request from a base branch and compare branch.",
+        "Pull request numbers are unique within a repository."
+      ],
+      "verification": [
+        "Run direnv exec . devenv up.",
+        "Add or update playwright/pull-requests.spec.js coverage for PR creation.",
+        "Verify a created PR has a stable canonical route."
+      ],
+      "priority": 20,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "PR-002",
+      "title": "Add pull request list page with useful filters",
+      "description": "As a reviewer, I want to scan and filter repository pull requests so I can find the PR I need quickly.",
+      "dependencies": [
+        "PR-001"
+      ],
+      "acceptanceCriteria": [
+        "Repository shell includes a pull request list page.",
+        "The list supports at least state, author, and base branch filters.",
+        "The empty state is clear when no pull requests match."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/pull-requests.spec.js --grep \"pull request list|filters\".",
+        "Run direnv exec . devenv up.",
+        "Verify filters produce predictable URL-visible state if relevant."
+      ],
+      "priority": 21,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "PR-003",
+      "title": "Add pull request detail routes for conversation and commits",
+      "description": "As a reviewer, I want separate conversation and commits pages so the PR detail experience feels stable and page-like.",
+      "dependencies": [
+        "PR-001"
+      ],
+      "acceptanceCriteria": [
+        "Pull request detail has dedicated routes for conversation and commits.",
+        "Conversation route shows title, description, author, branches, and state.",
+        "Commits route lists commits in the compare range."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/pull-requests.spec.js --grep \"conversation tab|commits tab\".",
+        "Run direnv exec . devenv up.",
+        "Verify route changes preserve the PR shell and browser history."
+      ],
+      "priority": 22,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "PR-004",
+      "title": "Add top-level PR comments on the conversation route",
+      "description": "As a reviewer, I want to add conversation comments so a pull request can support lightweight discussion and CLI commenting.",
+      "dependencies": [
+        "PR-003"
+      ],
+      "acceptanceCriteria": [
+        "Users can add top-level comments to a pull request conversation.",
+        "Comments persist on reload.",
+        "This surface is sufficient for rgh pr comment to call into."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/pull-requests.spec.js --grep \"conversation comment\".",
+        "Run direnv exec . devenv up.",
+        "Verify newly posted comments appear in order on reload."
+      ],
+      "priority": 23,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "PR-005",
+      "title": "Add files route with merge-base diff loading",
+      "description": "As a reviewer, I want the files route to show the real pull request diff so I can review changes the way GitWigum should render them.",
+      "dependencies": [
+        "PR-001"
+      ],
+      "acceptanceCriteria": [
+        "Pull request detail has a dedicated files route.",
+        "Files route computes diff from the live merge base between base branch and compare branch.",
+        "Diff view renders changed files, hunks, and line numbers."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/pull-requests.spec.js --grep \"files tab|merge base|render diff\".",
+        "Run direnv exec . devenv up.",
+        "Verify the files route remains the main code review surface."
+      ],
+      "priority": 24,
+      "estimateMinutes": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "PR-006",
+      "title": "Add rebase-correct diff regression coverage",
+      "description": "As the product, I need proof that rebasing the compare branch does not break the pull request diff or require an update branch feature.",
+      "dependencies": [
+        "PR-005"
+      ],
+      "acceptanceCriteria": [
+        "A focused test rebases the compare branch and confirms the files route still renders the correct merge-base diff.",
+        "No visible update branch UI is needed for the test to pass.",
+        "The test clearly encodes the product rule that diffs come from merge base, not stored patch uploads."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/pull-requests.spec.js --grep \"rebase keeps diff correct\".",
+        "Run direnv exec . devenv up.",
+        "Use a seeded or scripted repository where a compare branch rebase changes commit SHAs but not intended diff semantics."
+      ],
+      "priority": 25,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DIFFAI-001",
+      "title": "Add diff AI response job model with location fingerprinting",
+      "description": "As the backend, I need a persisted model for diff explanation jobs so inline AI answers survive reloads and can be reused.",
+      "dependencies": [
+        "PR-005"
+      ],
+      "acceptanceCriteria": [
+        "The model stores pull request, file path, side, line number, head SHA, status, response, and dismissed state.",
+        "A fingerprint uniquely identifies one diff location for one pull request head state.",
+        "The schema supports queued, running, succeeded, and failed states."
+      ],
+      "verification": [
+        "Run direnv exec . devenv up.",
+        "Verify a persisted row can survive reload and be looked up again by fingerprint.",
+        "Keep the migration forward-only."
+      ],
+      "priority": 26,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DIFFAI-002",
+      "title": "Add inline Ask AI trigger and loading panel on diff lines",
+      "description": "As a reviewer, I want to click Ask AI on one diff line and immediately see inline progress so the review flow stays anchored to the code.",
+      "dependencies": [
+        "DIFFAI-001"
+      ],
+      "acceptanceCriteria": [
+        "Files route exposes an Ask AI action on a specific diff line.",
+        "Clicking Ask AI creates or reuses the job record for that exact fingerprint.",
+        "The UI shows a loading panel inline beneath the targeted diff location."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/pull-requests.spec.js --grep \"ask ai loading\".",
+        "Run direnv exec . devenv up.",
+        "Verify clicking the action twice does not create obvious duplicate UI panels."
+      ],
+      "priority": 27,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DIFFAI-003",
+      "title": "Run the explanation job and persist the inline answer",
+      "description": "As a reviewer, I want the system to explain the selected diff line with enough PR context and keep that answer visible after reload.",
+      "dependencies": [
+        "DIFFAI-002"
+      ],
+      "acceptanceCriteria": [
+        "The job prompt includes PR title, description, base branch, compare branch, file path, diff hunk, selected line, and nearby lines.",
+        "Successful job results render inline beneath the selected diff location.",
+        "The answer persists on reload and failures are visible in the UI."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/pull-requests.spec.js --grep \"ask ai completion|persist on reload\".",
+        "Run direnv exec . devenv up.",
+        "Use a deterministic test stub or fixture mode for the model call if needed."
+      ],
+      "priority": 28,
+      "estimateMinutes": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "DIFFAI-004",
+      "title": "Persist dismiss state and reuse completed answers",
+      "description": "As a reviewer, I want to dismiss an inline AI answer and keep it hidden until I explicitly ask again.",
+      "dependencies": [
+        "DIFFAI-003"
+      ],
+      "acceptanceCriteria": [
+        "Users can dismiss an inline AI answer.",
+        "Dismiss state persists on reload.",
+        "Asking again on the same unchanged location can reuse the stored answer instead of recomputing."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/pull-requests.spec.js --grep \"dismiss ai response\".",
+        "Run direnv exec . devenv up.",
+        "Verify unchanged head SHA and fingerprint lead to reuse rather than obvious duplication."
+      ],
+      "priority": 29,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AGENT-001",
+      "title": "Add repository Agents route and prompt form",
+      "description": "As a maintainer, I want a dedicated repository Agents page so prompt-to-PR is a first-class product surface rather than a hidden action.",
+      "dependencies": [
+        "REPO-005"
+      ],
+      "acceptanceCriteria": [
+        "Repository shell includes an Agents page.",
+        "Agents page contains a prompt form with optional title, description, and base branch.",
+        "Agents page reserves space for recent prompt jobs."
+      ],
+      "verification": [
+        "Add or update playwright/agents.spec.js.",
+        "Run direnv exec . npm run test:playwright -- playwright/agents.spec.js --grep \"agents form\".",
+        "Run direnv exec . devenv up."
+      ],
+      "priority": 30,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AGENT-002",
+      "title": "Create prompt PR job rows and immediate draft pull requests",
+      "description": "As a maintainer, I want prompt submission to create a draft PR immediately so the user can track status from a real pull request page right away.",
+      "dependencies": [
+        "AGENT-001",
+        "PR-001"
+      ],
+      "acceptanceCriteria": [
+        "Submitting the form creates a prompt job row.",
+        "Submitting the form creates a compare branch name immediately from the chosen base branch.",
+        "Submitting the form creates a draft pull request immediately and shows queued state."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/agents.spec.js --grep \"creates draft pr immediately\".",
+        "Run direnv exec . devenv up.",
+        "Verify the newly created PR route is reachable before Codex work finishes."
+      ],
+      "priority": 31,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AGENT-003",
+      "title": "Prepare a local workspace clone and run Codex CLI from the job",
+      "description": "As the job system, I need to run Codex in a real local working clone so prompt-to-PR can make actual code changes without remote infrastructure.",
+      "dependencies": [
+        "AGENT-002"
+      ],
+      "acceptanceCriteria": [
+        "The job clones the repository into a local workspace.",
+        "The job checks out the base branch and compare branch in that workspace.",
+        "The job launches Codex CLI locally and captures job logs."
+      ],
+      "verification": [
+        "Run direnv exec . devenv up.",
+        "Use a deterministic fake or fixture mode for Playwright if the real Codex invocation is too unstable for UI tests.",
+        "Run direnv exec . npm run test:playwright -- playwright/agents.spec.js --grep \"job running\"."
+      ],
+      "priority": 32,
+      "estimateMinutes": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AGENT-004",
+      "title": "Validate text-file changes, commit them, and push the compare branch",
+      "description": "As the prompt-to-PR worker, I need to reject no-op runs and only succeed when there are real text changes committed to the compare branch.",
+      "dependencies": [
+        "AGENT-003"
+      ],
+      "acceptanceCriteria": [
+        "The job fails visibly when there are no real text-file changes.",
+        "Successful runs create a commit on the compare branch.",
+        "Successful runs push the compare branch and attach prompt metadata to the generated commit."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/agents.spec.js --grep \"push compare branch|job success\".",
+        "Run direnv exec . devenv up.",
+        "Verify the compare branch commit is visible in the PR commits route."
+      ],
+      "priority": 33,
+      "estimateMinutes": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "AGENT-005",
+      "title": "Show queued, running, failed, and succeeded job state on Agents and PR pages",
+      "description": "As a user, I want prompt-to-PR jobs to be visible where I work so I can tell whether the system is still running, failed, or done.",
+      "dependencies": [
+        "AGENT-004"
+      ],
+      "acceptanceCriteria": [
+        "Agents page lists prompt jobs with queued, running, failed, and succeeded states.",
+        "The related draft PR page shows the current prompt job status in a visible banner.",
+        "Failures expose a useful summary without requiring manual log inspection."
+      ],
+      "verification": [
+        "Run direnv exec . npm run test:playwright -- playwright/agents.spec.js --grep \"job banner|failure state\".",
+        "Run direnv exec . devenv up.",
+        "Verify state survives reload on both the Agents page and the PR page."
+      ],
+      "priority": 34,
+      "estimateMinutes": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CLI-001",
+      "title": "Add rgh auth login backed by device login requests and API tokens",
+      "description": "As a CLI user, I want rgh auth login to create a durable authenticated session so I can use repository and pull request commands against the local GitWigum host.",
+      "dependencies": [
+        "AUTH-004"
+      ],
+      "acceptanceCriteria": [
+        "rgh auth login can authenticate against the host and store a reusable local session.",
+        "The web app exposes the minimal approval flow required for device login.",
+        "The resulting auth token can be used by later rgh commands."
+      ],
+      "verification": [
+        "Run scripts/gitWiggum rgh build.",
+        "Smoke test rgh auth login against the local host.",
+        "Run direnv exec . devenv up."
+      ],
+      "priority": 35,
+      "estimateMinutes": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CLI-002",
+      "title": "Add rgh repo list, repo view, and repo clone",
+      "description": "As a CLI user, I want repository commands so I can inspect and clone repositories without opening the browser first.",
+      "dependencies": [
+        "CLI-001",
+        "REPO-002",
+        "GIT-001"
+      ],
+      "acceptanceCriteria": [
+        "rgh repo list shows visible repositories.",
+        "rgh repo view shows repository metadata and clone info.",
+        "rgh repo clone clones over HTTP using stored auth when necessary."
+      ],
+      "verification": [
+        "Run scripts/gitWiggum rgh build.",
+        "Smoke test rgh repo list, rgh repo view, and rgh repo clone.",
+        "Verify clone results in a usable local repository."
+      ],
+      "priority": 36,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CLI-003",
+      "title": "Add rgh pr list, pr view, and pr comment",
+      "description": "As a CLI user, I want pull request commands so I can inspect and comment on PRs from the terminal.",
+      "dependencies": [
+        "CLI-001",
+        "PR-002",
+        "PR-003",
+        "PR-004"
+      ],
+      "acceptanceCriteria": [
+        "rgh pr list shows repository pull requests.",
+        "rgh pr view shows pull request metadata.",
+        "rgh pr comment creates a top-level pull request conversation comment."
+      ],
+      "verification": [
+        "Run scripts/gitWiggum rgh build.",
+        "Smoke test the three PR commands against a real PR.",
+        "Verify the comment appears on the browser conversation route."
+      ],
+      "priority": 37,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CAPTURE-001",
+      "title": "Add rgh capture for repo-scoped Codex, Claude Code, and Cursor context",
+      "description": "As a developer, I want a single capture command so I can inspect what local AI/editor context would be attached to the next commit.",
+      "dependencies": [
+        "CLI-001"
+      ],
+      "acceptanceCriteria": [
+        "rgh capture returns the latest repository-relevant capture as JSON.",
+        "The output records the source of the capture such as Codex, Claude Code, or Cursor.",
+        "The output includes raw capture payload data."
+      ],
+      "verification": [
+        "Run scripts/gitWiggum rgh build.",
+        "Smoke test rgh capture from a repository with representative local AI/editor state.",
+        "Verify output is valid JSON and scoped to the current repository."
+      ],
+      "priority": 38,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "CAPTURE-002",
+      "title": "Install managed git hooks that attach GitWigum commit metadata",
+      "description": "As a developer, I want commits to automatically carry AI provenance so the web app can explain how a change was produced.",
+      "dependencies": [
+        "CAPTURE-001"
+      ],
+      "acceptanceCriteria": [
+        "rgh installs managed hooks into the current repository.",
+        "A commit made after local AI/editor activity gets GitWigum metadata attached.",
+        "Stored metadata preserves source, prompt, thinking, and raw capture payload."
+      ],
+      "verification": [
+        "Run scripts/gitWiggum rgh build.",
+        "Install hooks in a test clone, make an AI-assisted commit, and inspect the resulting commit metadata.",
+        "Verify hook installation is idempotent."
+      ],
+      "priority": 39,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "PROV-001",
+      "title": "Parse or ingest commit AI metadata and show it on the commit detail page",
+      "description": "As a reviewer, I want commit detail pages to show prompt provenance when present so I can understand how a change was produced.",
+      "dependencies": [
+        "CAPTURE-002"
+      ],
+      "acceptanceCriteria": [
+        "The web app can read commit AI metadata reliably.",
+        "Commit detail page shows source, prompt, thinking, and payload summary or access when metadata exists.",
+        "Commit detail page degrades cleanly when no metadata exists."
+      ],
+      "verification": [
+        "Create a commit with metadata using the CLI flow.",
+        "Add or update focused Playwright coverage for commit provenance UI.",
+        "Run direnv exec . devenv up."
+      ],
+      "priority": 40,
+      "estimateMinutes": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "PROV-002",
+      "title": "Show prompt attribution for changed lines on the pull request files route",
+      "description": "As a reviewer, I want changed lines to expose originating prompt context when the underlying commit includes AI metadata.",
+      "dependencies": [
+        "PROV-001",
+        "PR-005"
+      ],
+      "acceptanceCriteria": [
+        "Right-side changed lines can show prompt attribution when the blamed commit has AI metadata.",
+        "Opening the attribution reveals the captured prompt context.",
+        "The UI stays quiet when no metadata exists for the originating commit."
+      ],
+      "verification": [
+        "Create a PR whose compare branch includes at least one AI-attributed commit.",
+        "Run focused Playwright coverage for PR line attribution.",
+        "Run direnv exec . devenv up."
+      ],
+      "priority": 41,
+      "estimateMinutes": 30,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

@@ -1,0 +1,56 @@
+cabal-version:       2.2
+name:                ihp-auth-support
+version:             0.0.1
+synopsis:            ihp-auth-support
+description:         Email confirmation helpers for IHP auth flows
+license:             NONE
+author:              digitally induced GmbH
+maintainer:          support@digitallyinduced.com
+build-type:          Simple
+
+library
+    build-depends:
+        ihp
+        , base
+        , ihp-mail
+        , hasql-mapping
+        , postgresql-simple
+        , uuid
+        , wai
+    default-extensions:
+        OverloadedStrings
+        , NoImplicitPrelude
+        , ImplicitParams
+        , Rank2Types
+        , NamedFieldPuns
+        , TypeSynonymInstances
+        , FlexibleInstances
+        , DisambiguateRecordFields
+        , DuplicateRecordFields
+        , OverloadedLabels
+        , FlexibleContexts
+        , DataKinds
+        , QuasiQuotes
+        , TypeFamilies
+        , PackageImports
+        , ScopedTypeVariables
+        , RecordWildCards
+        , TypeApplications
+        , DataKinds
+        , InstanceSigs
+        , DeriveGeneric
+        , MultiParamTypeClasses
+        , TypeOperators
+        , DeriveDataTypeable
+        , DefaultSignatures
+        , BangPatterns
+        , FunctionalDependencies
+        , PartialTypeSignatures
+        , BlockArguments
+        , LambdaCase
+        , StandaloneDeriving
+        , OverloadedRecordDot
+    hs-source-dirs: .
+    exposed-modules:
+        IHP.AuthSupport.Confirm
+        , IHP.AuthSupport.Controller.Confirmations

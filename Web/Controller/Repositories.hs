@@ -1,0 +1,194 @@
+module Web.Controller.Repositories where
+
+import qualified Control.Exception as Exception
+import qualified Data.Text as Text
+import Application.Service.GitRepository
+import IHP.QueryBuilder (filterWhereCaseInsensitive)
+import IHP.ValidationSupport.Types (ValidatorResult (..), getValidationFailure)
+import IHP.ValidationSupport.ValidateField (isSlug, nonEmpty, validateField, validateFieldIO)
+import Web.Controller.Prelude
+import Web.View.Repositories.Agents
+import Web.View.Repositories.New
+import Web.View.Repositories.PullRequests
+import Web.View.Repositories.Show
+
+instance Controller RepositoriesController where
+    beforeAction = ensureIsUser
+
+    action NewRepositoryAction =
+        render NewView { repository = buildRepository currentUser "" "" "public" }
+
+    action CreateRepositoryAction = do
+        let name = paramOrDefault "" "name"
+        let description = paramOrDefault "" "description"
+        let visibility = paramOrDefault "public" "visibility"
+        let repository = buildRepository currentUser name description visibility
+
+        repositoryWithValidation <-
+            repository
+                |> validateField #name nonEmpty
+                |> validateField #name isSlug
+                |> validateFieldIO #name (validateRepositoryNameAvailable currentUser)
+
+        if hasErrors repositoryWithValidation
+            then render NewView { repository = repositoryWithValidation }
+            else do
+                createdRepository <- repositoryWithValidation |> createRecord
+                bootstrapResult <- liftIO $ Exception.try @Exception.SomeException (initializeRepositoryOnDisk currentUser createdRepository)
+
+                case bootstrapResult of
+                    Left _ -> do
+                        liftIO (cleanupRepositoryOnDisk currentUser createdRepository)
+                        createdRepository |> deleteRecord
+                        setErrorMessage "We could not initialize the repository on disk. Please try again."
+                        redirectTo NewRepositoryAction
+                    Right latestCommitSha -> do
+                        createdRepository
+                            |> set #latestCommitSha (Just latestCommitSha)
+                            |> updateRecord
+
+                        redirectTo
+                            ShowRepositoryAction
+                                { ownerSlug = personalOwnerSlug currentUser
+                                , repositoryName = get #name createdRepository
+                                }
+
+    action ShowRepositoryAction { ownerSlug, repositoryName } = do
+        (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
+        renderBrowserView owner repository (get #defaultBranch repository) ""
+
+    action RepositoryTreeAction { ownerSlug, repositoryName, branchName, treePath } = do
+        (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
+        renderBrowserView owner repository branchName treePath
+
+    action RepositoryPullRequestsAction { ownerSlug, repositoryName } = do
+        (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
+        pullRequests <-
+            query @PullRequest
+                |> filterWhere (#repositoryId, get #id repository)
+                |> orderByDesc #number
+                |> fetch
+
+        render PullRequestsView { owner, repository, pullRequests }
+
+    action RepositoryAgentsAction { ownerSlug, repositoryName } = do
+        (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
+        render AgentsView { owner, repository }
+
+buildRepository :: User -> Text -> Text -> Text -> Repository
+buildRepository currentUser name description visibility =
+    newRecord @Repository
+        |> set #ownerUserId (get #id currentUser)
+        |> set #name (normalizeRepositoryName name)
+        |> set #description (normalizeRepositoryDescription description)
+        |> set #isPrivate (visibility == "private")
+
+validateRepositoryNameAvailable ::
+    (?modelContext :: ModelContext) =>
+    User ->
+    Text ->
+    IO ValidatorResult
+validateRepositoryNameAvailable currentUser repositoryName = do
+    existingRepository <-
+        query @Repository
+            |> filterWhere (#ownerUserId, get #id currentUser)
+            |> filterWhereCaseInsensitive (#name, repositoryName)
+            |> fetchOneOrNothing
+
+    pure $
+        case existingRepository of
+            Just _ -> Failure "This repository name is already in use for your namespace"
+            Nothing -> Success
+
+normalizeRepositoryName :: Text -> Text
+normalizeRepositoryName = Text.toLower . Text.strip
+
+normalizeRepositoryDescription :: Text -> Maybe Text
+normalizeRepositoryDescription description =
+    description
+        |> Text.strip
+        |> \value -> if Text.null value then Nothing else Just value
+
+hasErrors :: Repository -> Bool
+hasErrors repository =
+    isJust (getValidationFailure #name repository)
+
+fetchRepositoryContext ::
+    (?modelContext :: ModelContext) =>
+    Text ->
+    Text ->
+    IO (User, Repository)
+fetchRepositoryContext ownerSlug repositoryName = do
+    owner <-
+        query @User
+            |> filterWhere (#username, ownerSlug)
+            |> fetchOne
+
+    repository <-
+        query @Repository
+            |> filterWhere (#ownerUserId, get #id owner)
+            |> filterWhere (#name, repositoryName)
+            |> fetchOne
+
+    pure (owner, repository)
+
+renderBrowserView ::
+    (?context :: ControllerContext, ?modelContext :: ModelContext, ?request :: Request, ?respond :: Respond) =>
+    User ->
+    Repository ->
+    Text ->
+    Text ->
+    IO ()
+renderBrowserView owner repository branchName currentPath = do
+    availableBranches <- liftIO $ listRepositoryBranches owner repository
+    pathType <- liftIO $ readRepositoryPathType owner repository branchName currentPath
+    let explorerPath =
+            case pathType of
+                Just TreeEntryFile -> parentTreePath currentPath
+                _ -> currentPath
+    treeEntries <- liftIO $ listRepositoryTree owner repository branchName explorerPath
+
+    readmeContent <-
+        if Text.null currentPath
+            then liftIO $ readRepositoryFile owner repository branchName "README.md"
+            else pure Nothing
+
+    selectedFilePreview <-
+        case pathType of
+            Just TreeEntryFile -> do
+                fileContent <- liftIO $ readRepositoryFile owner repository branchName currentPath
+                commitContext <- liftIO $ readLatestCommitContext owner repository branchName currentPath
+
+                pure $
+                    case fileContent of
+                        Just content ->
+                            Just
+                                FilePreview
+                                    { filePath = currentPath
+                                    , fileContent = content
+                                    , commitContext
+                                    }
+                        Nothing -> Nothing
+            _ -> pure Nothing
+
+    render
+        ShowView
+            { owner
+            , repository
+            , branchName
+            , currentPath
+            , explorerPath
+            , availableBranches
+            , treeEntries
+            , readmeContent
+            , selectedFilePreview
+            }
+
+parentTreePath :: Text -> Text
+parentTreePath path =
+    path
+        |> Text.splitOn "/"
+        |> reverse
+        |> drop 1
+        |> reverse
+        |> Text.intercalate "/"

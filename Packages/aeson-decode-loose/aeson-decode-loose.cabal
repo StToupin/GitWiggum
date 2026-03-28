@@ -1,0 +1,29 @@
+cabal-version:      2.4
+name:               aeson-decode-loose
+version:            0.1.0.0
+synopsis:           Best-effort decode for partially streamed JSON
+description:
+  This package provides a best-effort JSON decoder for incomplete or
+  unterminated JSON text. It can close open strings/brackets, repair common
+  dangling key patterns, and decode with aeson.
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Contributors
+maintainer:         contributors@example.com
+category:           Data, JSON
+build-type:         Simple
+extra-doc-files:
+  README.md
+  CHANGELOG.md
+
+library
+  exposed-modules:
+    Data.Aeson.Decode.Loose
+  hs-source-dirs:
+    src
+  build-depends:
+    aeson >=2.0 && <3,
+    base >=4.14 && <5,
+    text >=1.2 && <3
+  default-language: Haskell2010
+  ghc-options:      -Wall

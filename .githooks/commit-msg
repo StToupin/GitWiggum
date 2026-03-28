@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+message_file="$1"
+repo_root="$(git rev-parse --show-toplevel)"
+git_dir="$(git rev-parse --git-dir)"
+
+case "$git_dir" in
+    /*) ;;
+    *) git_dir="$repo_root/$git_dir" ;;
+esac
+
+capture_dir="$git_dir/gitwiggum"
+capture_b64="$capture_dir/codex-capture.b64"
+
+if [ ! -f "$capture_b64" ]; then
+    exit 0
+fi
+
+capture_payload="$(cat "$capture_b64")"
+tmp_file="$(mktemp)"
+
+grep -v '^GitWiggum-Capture-Base64:' "$message_file" >"$tmp_file" || true
+mv "$tmp_file" "$message_file"
+
+if [ -s "$message_file" ] && [ -n "$(tail -c 1 "$message_file" 2>/dev/null)" ]; then
+    printf '\n' >>"$message_file"
+fi
+
+printf '\nGitWiggum-Capture-Base64: %s\n' "$capture_payload" >>"$message_file"
+
+rm -f "$capture_b64"
