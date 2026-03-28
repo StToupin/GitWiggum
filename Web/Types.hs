@@ -38,6 +38,10 @@ data DashboardController
     = DashboardAction
     deriving (Eq, Show, Data)
 
+data GitHttpController
+    = RepositoryGitHttpAction { ownerSlug :: !Text, repositoryName :: !Text, gitPathInfo :: !Text }
+    deriving (Eq, Show, Data)
+
 data RepositoriesController
     = NewRepositoryAction
     | CreateRepositoryAction

@@ -15,6 +15,8 @@ renderRepositoryShell :: User -> Repository -> RepositoryShellTab -> Html -> Htm
 renderRepositoryShell owner repository activeTab inner =
     let ownerSlug = get #username owner
         repoName = get #name repository
+        httpCloneCommand =
+            "git clone '" <> urlTo RepositoryGitHttpAction { ownerSlug, repositoryName = repoName, gitPathInfo = "" } <> "'"
         browserPath =
             pathTo
                 ShowRepositoryAction
@@ -60,6 +62,13 @@ renderRepositoryShell owner repository activeTab inner =
                     <a class={tabClass activeTab AgentsTab} href={agentsPath} data-posthog-id="repository-shell-agents">
                         Agents
                     </a>
+                </div>
+
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body p-4">
+                        <div class="text-uppercase small fw-semibold text-secondary mb-2">Clone over HTTP</div>
+                        <code>{httpCloneCommand}</code>
+                    </div>
                 </div>
 
                 {inner}
