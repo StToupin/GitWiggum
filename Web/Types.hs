@@ -40,6 +40,8 @@ data DashboardController
 
 data RepositoriesController
     = NewRepositoryAction
+    | CreateRepositoryAction
+    | ShowRepositoryAction { ownerSlug :: !Text, repositoryName :: !Text }
     deriving (Eq, Show, Data)
 
 type instance CurrentUserRecord = User
