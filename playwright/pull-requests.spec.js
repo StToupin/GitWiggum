@@ -181,3 +181,47 @@ test('pull request numbers increment within the same repository', async ({ page 
   await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/pull-requests/2/conversation$`));
   await expect(page.getByRole('heading', { name: '#2 Beta branch' })).toBeVisible();
 });
+
+test('pull request conversation tab and commits tab preserve PR shell routing', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const email = `repo-pr-tabs-${suffix}@example.com`;
+  const username = `repo-pr-tabs-${suffix}`;
+  const repositoryName = `pr-tabs-${suffix}`;
+  const compareBranch = 'feature-history';
+
+  await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
+  await createRepository(page, {
+    repositoryName,
+    description: 'Pull request tab routing smoke test',
+    visibility: 'public',
+  });
+  await expect.poll(() => fs.existsSync(repositoryBarePath(username, repositoryName))).toBe(true);
+
+  seedRepositoryBranch({
+    ownerSlug: username,
+    repositoryName,
+    branch: compareBranch,
+    files: {
+      'docs/history.md': 'history branch content\n',
+    },
+  });
+
+  await page.goto(`/${username}/${repositoryName}/pull-requests/new`);
+  await page.getByLabel('Title').fill('Track compare history');
+  await page.getByLabel('Compare branch').selectOption(compareBranch);
+  await page.getByRole('button', { name: 'Create pull request' }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/pull-requests/1/conversation$`));
+  await expect(page.getByRole('link', { name: 'Conversation' })).toHaveClass(/btn-dark/);
+  await expect(page.getByRole('link', { name: 'Commits' })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Commits' }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/pull-requests/1/commits$`));
+  await expect(page.getByRole('link', { name: 'Commits' })).toHaveClass(/btn-dark/);
+  await expect(page.getByText('Seed feature-history')).toBeVisible();
+
+  await page.getByRole('link', { name: 'Conversation' }).click();
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/pull-requests/1/conversation$`));
+  await expect(page.getByText('Track compare history')).toBeVisible();
+});

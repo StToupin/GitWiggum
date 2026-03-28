@@ -5,7 +5,9 @@ import qualified Data.Text as Text
 import IHP.ValidationSupport.Types (attachFailure, getValidationFailure)
 import IHP.ValidationSupport.ValidateField (nonEmpty, validateField)
 import Application.Service.GitRepository (listRepositoryBranches)
+import qualified Application.Service.GitRepository as GitRepository
 import Web.Controller.Prelude
+import Web.View.PullRequests.Commits
 import Web.View.PullRequests.Conversation
 import Web.View.PullRequests.New
 
@@ -55,6 +57,17 @@ instance Controller PullRequestsController where
     action ShowPullRequestConversationAction { ownerSlug, repositoryName, pullRequestNumber } = do
         (owner, repository, pullRequest, author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
         render ConversationView { owner, repository, pullRequest, author }
+
+    action ShowPullRequestCommitsAction { ownerSlug, repositoryName, pullRequestNumber } = do
+        (owner, repository, pullRequest, author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
+        commits <-
+            liftIO $
+                GitRepository.listPullRequestCommits
+                    owner
+                    repository
+                    (get #baseBranch pullRequest)
+                    (get #compareBranch pullRequest)
+        render CommitsView { owner, repository, pullRequest, author, commits }
 
 buildInitialPullRequest :: User -> Repository -> [Text] -> PullRequest
 buildInitialPullRequest currentUser repository availableBranches =
