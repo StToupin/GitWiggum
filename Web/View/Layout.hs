@@ -17,13 +17,27 @@ defaultLayout inner = [hsx|
         {stylesheets}
         {scripts}
 
-        <title>{pageTitleOrDefault "App"}</title>
+        <title>{pageTitleOrDefault "GitWiggum"}</title>
     </head>
-    <body>
-        <div class="container mt-4">
-            {renderFlashMessages}
-            {inner}
-        </div>
+    <body class="gitwiggum-app-shell">
+        <nav class="navbar navbar-expand-lg border-bottom bg-white">
+            <div class="container">
+                <a class="navbar-brand fw-semibold" href={pathTo HomeAction}>
+                    GitWiggum
+                </a>
+                <div class="ms-auto d-flex align-items-center gap-3">
+                    <a class="btn btn-outline-dark btn-sm" href={pathTo NewRegistrationAction} data-posthog-id="nav-sign-up">
+                        Sign up
+                    </a>
+                </div>
+            </div>
+        </nav>
+        <main class="py-4 py-lg-5">
+            <div class="container">
+                {renderFlashMessages}
+                {inner}
+            </div>
+        </main>
     </body>
 </html>
 |]
