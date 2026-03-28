@@ -9,6 +9,7 @@ import Web.View.Repositories.Shell
 data PullRequestDetailTab
     = ConversationTab
     | CommitsTab
+    | FilesTab
     deriving (Eq, Show)
 
 renderPullRequestShell :: User -> Repository -> PullRequest -> User -> PullRequestDetailTab -> Html -> Html
@@ -31,6 +32,13 @@ renderPullRequestShell owner repository pullRequest author activeTab inner =
         commitsPath =
             pathTo
                 ShowPullRequestCommitsAction
+                    { ownerSlug = ownerSlug
+                    , repositoryName = repositoryName
+                    , pullRequestNumber = get #number pullRequest
+                    }
+        filesPath =
+            pathTo
+                ShowPullRequestFilesAction
                     { ownerSlug = ownerSlug
                     , repositoryName = repositoryName
                     , pullRequestNumber = get #number pullRequest
@@ -89,6 +97,13 @@ renderPullRequestShell owner repository pullRequest author activeTab inner =
                     data-posthog-id="pull-request-tab-commits"
                 >
                     Commits
+                </a>
+                <a
+                    class={tabClass activeTab FilesTab}
+                    href={filesPath}
+                    data-posthog-id="pull-request-tab-files"
+                >
+                    Files
                 </a>
             </div>
 

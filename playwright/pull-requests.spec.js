@@ -42,14 +42,25 @@ function repositoryBarePath(ownerSlug, repositoryName) {
   return path.join(repoRoot, 'data', 'repositories', ownerSlug, `${repositoryName}.git`);
 }
 
-function seedRepositoryBranch({ ownerSlug, repositoryName, branch, files, fromBranch = 'main' }) {
+function seedRepositoryBranch({
+  ownerSlug,
+  repositoryName,
+  branch,
+  files,
+  fromBranch = 'main',
+  commitMessage = `Seed ${branch}`,
+}) {
   const barePath = repositoryBarePath(ownerSlug, repositoryName);
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitwiggum-pr-branch-'));
   const cloneDir = path.join(tempRoot, 'repo');
 
   try {
-    runGit(['clone', barePath, cloneDir]);
-    runGit(['checkout', '-b', branch], { cwd: cloneDir });
+    runGit(['clone', '--branch', fromBranch, barePath, cloneDir]);
+    if (branch === fromBranch) {
+      runGit(['checkout', branch], { cwd: cloneDir });
+    } else {
+      runGit(['checkout', '-b', branch], { cwd: cloneDir });
+    }
     runGit(['config', 'user.name', 'Playwright Seeder'], { cwd: cloneDir });
     runGit(['config', 'user.email', 'playwright@example.com'], { cwd: cloneDir });
 
@@ -60,7 +71,7 @@ function seedRepositoryBranch({ ownerSlug, repositoryName, branch, files, fromBr
     }
 
     runGit(['add', '.'], { cwd: cloneDir });
-    runGit(['commit', '-m', `Seed ${branch}`], { cwd: cloneDir });
+    runGit(['commit', '-m', commitMessage], { cwd: cloneDir });
     runGit(['push', 'origin', `HEAD:${branch}`], { cwd: cloneDir });
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
@@ -224,4 +235,55 @@ test('pull request conversation tab and commits tab preserve PR shell routing', 
   await page.getByRole('link', { name: 'Conversation' }).click();
   await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/pull-requests/1/conversation$`));
   await expect(page.getByText('Track compare history')).toBeVisible();
+});
+
+test('pull request files tab renders the merge base diff', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const email = `repo-pr-files-${suffix}@example.com`;
+  const username = `repo-pr-files-${suffix}`;
+  const repositoryName = `pr-files-${suffix}`;
+  const compareBranch = 'feature-diff';
+
+  await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
+  await createRepository(page, {
+    repositoryName,
+    description: 'Pull request files diff smoke test',
+    visibility: 'public',
+  });
+  await expect.poll(() => fs.existsSync(repositoryBarePath(username, repositoryName))).toBe(true);
+
+  seedRepositoryBranch({
+    ownerSlug: username,
+    repositoryName,
+    branch: compareBranch,
+    fromBranch: 'main',
+    files: {
+      'src/feature.txt': 'feature-only line\n',
+    },
+    commitMessage: 'Seed feature diff',
+  });
+
+  seedRepositoryBranch({
+    ownerSlug: username,
+    repositoryName,
+    branch: 'main',
+    fromBranch: 'main',
+    files: {
+      'README.md': '# Drift on main\n',
+    },
+    commitMessage: 'Advance main branch',
+  });
+
+  await page.goto(`/${username}/${repositoryName}/pull-requests/new`);
+  await page.getByLabel('Title').fill('Render diff from merge base');
+  await page.getByLabel('Compare branch').selectOption(compareBranch);
+  await page.getByRole('button', { name: 'Create pull request' }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/pull-requests/1/conversation$`));
+  await page.getByRole('link', { name: 'Files', exact: true }).click();
+
+  await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/pull-requests/1/files$`));
+  await expect(page.getByText('src/feature.txt')).toBeVisible();
+  await expect(page.getByText('+feature-only line')).toBeVisible();
+  await expect(page.getByText('README.md', { exact: true })).not.toBeVisible();
 });

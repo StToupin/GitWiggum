@@ -1,7 +1,11 @@
 module Web.Controller.PullRequests where
 
+import qualified Application.Service.DiffAI as DiffAI
 import qualified Data.List as List
+import qualified Network.HTTP.Types as HTTP
+import qualified Network.Wai as WAI
 import qualified Data.Text as Text
+import IHP.ModelSupport (trackTableRead)
 import IHP.ValidationSupport.Types (attachFailure, getValidationFailure)
 import IHP.ValidationSupport.ValidateField (nonEmpty, validateField)
 import Application.Service.GitRepository (listRepositoryBranches)
@@ -9,6 +13,7 @@ import qualified Application.Service.GitRepository as GitRepository
 import Web.Controller.Prelude
 import Web.View.PullRequests.Commits
 import Web.View.PullRequests.Conversation
+import Web.View.PullRequests.Files
 import Web.View.PullRequests.New
 
 instance Controller PullRequestsController where
@@ -68,6 +73,49 @@ instance Controller PullRequestsController where
                     (get #baseBranch pullRequest)
                     (get #compareBranch pullRequest)
         render CommitsView { owner, repository, pullRequest, author, commits }
+
+    action ShowPullRequestFilesAction { ownerSlug, repositoryName, pullRequestNumber } = do
+        autoRefresh do
+            (owner, repository, pullRequest, author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
+            headSha <- liftIO $ GitRepository.readPullRequestHeadSha owner repository (get #compareBranch pullRequest)
+            diffFiles <-
+                liftIO $
+                    GitRepository.readPullRequestDiff
+                        owner
+                        repository
+                        (get #baseBranch pullRequest)
+                        (get #compareBranch pullRequest)
+            trackTableRead "diff_ai_response_jobs"
+            diffAiJobs <-
+                query @DiffAiResponseJob
+                    |> filterWhere (#pullRequestId, get #id pullRequest)
+                    |> filterWhere (#dismissed, False)
+                    |> fetch
+            render FilesView { owner, repository, pullRequest, author, diffFiles, diffAiJobs, headSha }
+
+    action CreatePullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber } = do
+        (owner, repository, pullRequest, _author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
+
+        let maybeFilePath = paramOrNothing @Text "filePath"
+        let maybeSide = paramOrNothing @Text "side"
+        let maybeLineNumber = paramOrNothing @Int "lineNumber"
+
+        case (maybeFilePath, maybeSide, maybeLineNumber) of
+            (Just filePath, Just side, Just lineNumber)
+                | side `elem` [DiffAI.diffAiSideOld, DiffAI.diffAiSideNew] -> do
+                    maybeHeadSha <- liftIO $ GitRepository.readPullRequestHeadSha owner repository (get #compareBranch pullRequest)
+
+                    case maybeHeadSha of
+                        Just headSha -> do
+                            let location = DiffAI.DiffAiLocation { filePath, side, lineNumber }
+                            diffAiResponseJob <- DiffAI.enqueueOrReuseDiffAiResponseJob pullRequest headSha location
+                            renderFragment
+                                DiffAiResponseRowView
+                                    { diffAiResponseJob }
+                        Nothing ->
+                            respondAndExitWithHeaders (WAI.responseLBS HTTP.status422 [] "Could not resolve pull request head SHA")
+            _ ->
+                respondAndExitWithHeaders (WAI.responseLBS HTTP.status422 [] "Missing diff AI location")
 
 buildInitialPullRequest :: User -> Repository -> [Text] -> PullRequest
 buildInitialPullRequest currentUser repository availableBranches =

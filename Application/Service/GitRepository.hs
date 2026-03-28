@@ -3,6 +3,10 @@ module Application.Service.GitRepository
     , GitTreeEntry (..)
     , GitCommitContext (..)
     , GitPullRequestCommit (..)
+    , GitDiffFile (..)
+    , GitDiffHunk (..)
+    , GitDiffLine (..)
+    , GitDiffLineType (..)
     , GitTreeEntryType (..)
     , cleanupRepositoryOnDisk
     , enableHttpReceivePackOnDisk
@@ -11,6 +15,9 @@ module Application.Service.GitRepository
     , listRepositoryBranches
     , listRepositoryTree
     , readLatestCommitContext
+    , readPullRequestHeadSha
+    , readPullRequestDiff
+    , readPullRequestRawDiff
     , readRepositoryFile
     , readRepositoryPathType
     , repositoryGitHttpResponse
@@ -22,6 +29,7 @@ import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as ByteString.Char8
 import qualified Data.ByteString.Lazy as LazyByteString
 import qualified Data.CaseInsensitive as CaseInsensitive
+import Data.Char (isHexDigit)
 import qualified Data.List as List
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
@@ -85,6 +93,38 @@ data GitCommitContext = GitCommitContext
 data GitPullRequestCommit = GitPullRequestCommit
     { commitSha :: Text
     , commitSubject :: Text
+    }
+    deriving (Eq, Show)
+
+data GitDiffFile = GitDiffFile
+    { oldPath :: Text
+    , newPath :: Text
+    , hunks :: [GitDiffHunk]
+    }
+    deriving (Eq, Show)
+
+data GitDiffHunk = GitDiffHunk
+    { header :: Text
+    , oldStartLine :: Int
+    , oldLineCount :: Int
+    , newStartLine :: Int
+    , newLineCount :: Int
+    , lines :: [GitDiffLine]
+    }
+    deriving (Eq, Show)
+
+data GitDiffLineType
+    = DiffContextLine
+    | DiffAdditionLine
+    | DiffDeletionLine
+    deriving (Eq, Show)
+
+data GitDiffLine = GitDiffLine
+    { lineType :: GitDiffLineType
+    , content :: Text
+    , oldLineNumber :: Maybe Int
+    , newLineNumber :: Maybe Int
+    , lineCommitSha :: Maybe Text
     }
     deriving (Eq, Show)
 
@@ -164,7 +204,7 @@ listPullRequestCommits owner repository baseBranch compareBranch = do
             [ "log"
             , "--reverse"
             , "--format=%H%x09%s"
-            , cs (branchRef baseBranch <> ".." <> branchRef compareBranch)
+            , cs (gitRevisionRef baseBranch <> ".." <> gitRevisionRef compareBranch)
             ]
 
     pure $
@@ -172,6 +212,40 @@ listPullRequestCommits owner repository baseBranch compareBranch = do
             |> fromMaybe ""
             |> Text.lines
             |> mapMaybe parsePullRequestCommit
+
+readPullRequestDiff :: User -> Repository -> Text -> Text -> IO [GitDiffFile]
+readPullRequestDiff owner repository baseBranch compareBranch = do
+    diffText <- readPullRequestRawDiff owner repository baseBranch compareBranch
+
+    pure $
+        diffText
+            |> fromMaybe ""
+            |> parsePullRequestDiff
+
+readPullRequestHeadSha :: User -> Repository -> Text -> IO (Maybe Text)
+readPullRequestHeadSha owner repository compareRef =
+    fmap
+        (fmap Text.strip)
+        (readGitOutputMaybe owner repository ["rev-parse", cs (gitRevisionRef compareRef)])
+
+readPullRequestRawDiff :: User -> Repository -> Text -> Text -> IO (Maybe Text)
+readPullRequestRawDiff owner repository baseBranch compareBranch = do
+    maybeMergeBase <- readMergeBase owner repository baseBranch compareBranch
+
+    case maybeMergeBase of
+        Nothing ->
+            pure Nothing
+        Just mergeBase ->
+            readGitOutputMaybe
+                owner
+                repository
+                [ "diff"
+                , "--find-renames"
+                , "--unified=3"
+                , "--no-color"
+                , cs mergeBase
+                , cs (gitRevisionRef compareBranch)
+                ]
 
 listRepositoryTree :: User -> Repository -> Text -> Text -> IO [GitTreeEntry]
 listRepositoryTree owner repository branchName currentPath = do
@@ -236,7 +310,7 @@ readMergeBase :: User -> Repository -> Text -> Text -> IO (Maybe Text)
 readMergeBase owner repository baseBranch compareBranch =
     fmap
         (fmap Text.strip)
-        (readGitOutputMaybe owner repository ["merge-base", cs (branchRef baseBranch), cs (branchRef compareBranch)])
+        (readGitOutputMaybe owner repository ["merge-base", cs (gitRevisionRef baseBranch), cs (gitRevisionRef compareBranch)])
 
 runGit :: Maybe FilePath -> [String] -> IO Text
 runGit workingDirectory args = do
@@ -429,8 +503,240 @@ parsePullRequestCommit rawLine =
                         , commitSubject = Text.strip (Text.drop 1 commitSubject')
                         }
 
-branchRef :: Text -> Text
-branchRef branchName = "refs/heads/" <> branchName
+gitRevisionRef :: Text -> Text
+gitRevisionRef revision
+    | "refs/" `Text.isPrefixOf` revision = revision
+    | isHexSha revision = revision
+    | otherwise = "refs/heads/" <> revision
+
+isHexSha :: Text -> Bool
+isHexSha revision =
+    let trimmedRevision = Text.strip revision
+        trimmedLength = Text.length trimmedRevision
+     in trimmedLength >= 7
+            && trimmedLength <= 40
+            && Text.all isHexDigit trimmedRevision
+
+data DiffParseState = DiffParseState
+    { currentFile :: Maybe DiffFileBuilder
+    , currentHunk :: Maybe DiffHunkBuilder
+    , files :: [GitDiffFile]
+    }
+
+data DiffFileBuilder = DiffFileBuilder
+    { fileOldPath :: Text
+    , fileNewPath :: Text
+    , fileHunks :: [GitDiffHunk]
+    }
+
+data DiffHunkBuilder = DiffHunkBuilder
+    { hunkHeader :: Text
+    , hunkOldStartLine :: Int
+    , hunkOldLineCount :: Int
+    , hunkNewStartLine :: Int
+    , hunkNewLineCount :: Int
+    , nextOldLine :: Int
+    , nextNewLine :: Int
+    , hunkLines :: [GitDiffLine]
+    }
+
+parsePullRequestDiff :: Text -> [GitDiffFile]
+parsePullRequestDiff rawDiff =
+    rawDiff
+        |> Text.lines
+        |> foldl' parsePullRequestDiffLine initialDiffParseState
+        |> finalizeDiffParseState
+        |> files
+        |> reverse
+
+initialDiffParseState :: DiffParseState
+initialDiffParseState =
+    DiffParseState
+        { currentFile = Nothing
+        , currentHunk = Nothing
+        , files = []
+        }
+
+parsePullRequestDiffLine :: DiffParseState -> Text -> DiffParseState
+parsePullRequestDiffLine state rawLine
+    | "diff --git " `Text.isPrefixOf` rawLine =
+        let state' = finalizeCurrentFile state
+         in state'
+                { currentFile = Just (DiffFileBuilder "" "" [])
+                , currentHunk = Nothing
+                }
+    | "--- " `Text.isPrefixOf` rawLine =
+        updateCurrentFile (\file -> file { fileOldPath = parsePatchPath (Text.drop 4 rawLine) }) state
+    | "+++ " `Text.isPrefixOf` rawLine =
+        updateCurrentFile (\file -> file { fileNewPath = parsePatchPath (Text.drop 4 rawLine) }) state
+    | "@@" `Text.isPrefixOf` rawLine =
+        case parseDiffHunkHeader rawLine of
+            Just hunk ->
+                let state' = finalizeCurrentHunk state
+                 in state'
+                        { currentHunk = Just hunk
+                        }
+            Nothing -> state
+    | "\\ No newline at end of file" `Text.isPrefixOf` rawLine =
+        state
+    | otherwise =
+        case currentHunk state of
+            Just hunk ->
+                case appendDiffLine rawLine hunk of
+                    Just updatedHunk -> state { currentHunk = Just updatedHunk }
+                    Nothing -> state
+            Nothing ->
+                state
+
+finalizeDiffParseState :: DiffParseState -> DiffParseState
+finalizeDiffParseState = finalizeCurrentFile
+
+finalizeCurrentFile :: DiffParseState -> DiffParseState
+finalizeCurrentFile state =
+    let state' = finalizeCurrentHunk state
+     in case currentFile state' of
+            Just file ->
+                state'
+                    { currentFile = Nothing
+                    , files = buildDiffFile file : files state'
+                    }
+            Nothing ->
+                state'
+
+finalizeCurrentHunk :: DiffParseState -> DiffParseState
+finalizeCurrentHunk state =
+    case (currentFile state, currentHunk state) of
+        (Just file, Just hunk) ->
+            state
+                { currentFile = Just file { fileHunks = buildDiffHunk hunk : fileHunks file }
+                , currentHunk = Nothing
+                }
+        _ ->
+            state
+
+updateCurrentFile :: (DiffFileBuilder -> DiffFileBuilder) -> DiffParseState -> DiffParseState
+updateCurrentFile transform state =
+    case currentFile state of
+        Just file ->
+            state { currentFile = Just (transform file) }
+        Nothing ->
+            state
+
+buildDiffFile :: DiffFileBuilder -> GitDiffFile
+buildDiffFile DiffFileBuilder { fileOldPath, fileNewPath, fileHunks } =
+    GitDiffFile
+        { oldPath = fileOldPath
+        , newPath = fileNewPath
+        , hunks = reverse fileHunks
+        }
+
+buildDiffHunk :: DiffHunkBuilder -> GitDiffHunk
+buildDiffHunk DiffHunkBuilder { hunkHeader, hunkOldStartLine, hunkOldLineCount, hunkNewStartLine, hunkNewLineCount, hunkLines } =
+    GitDiffHunk
+        { header = hunkHeader
+        , oldStartLine = hunkOldStartLine
+        , oldLineCount = hunkOldLineCount
+        , newStartLine = hunkNewStartLine
+        , newLineCount = hunkNewLineCount
+        , lines = reverse hunkLines
+        }
+
+appendDiffLine :: Text -> DiffHunkBuilder -> Maybe DiffHunkBuilder
+appendDiffLine rawLine hunkBuilder =
+    case Text.uncons rawLine of
+        Just (' ', lineContent) ->
+            Just
+                hunkBuilder
+                    { nextOldLine = nextOldLine hunkBuilder + 1
+                    , nextNewLine = nextNewLine hunkBuilder + 1
+                    , hunkLines =
+                        GitDiffLine
+                            { lineType = DiffContextLine
+                            , content = lineContent
+                            , oldLineNumber = Just (nextOldLine hunkBuilder)
+                            , newLineNumber = Just (nextNewLine hunkBuilder)
+                            , lineCommitSha = Nothing
+                            }
+                            : hunkLines hunkBuilder
+                    }
+        Just ('+', lineContent) ->
+            Just
+                hunkBuilder
+                    { nextNewLine = nextNewLine hunkBuilder + 1
+                    , hunkLines =
+                        GitDiffLine
+                            { lineType = DiffAdditionLine
+                            , content = lineContent
+                            , oldLineNumber = Nothing
+                            , newLineNumber = Just (nextNewLine hunkBuilder)
+                            , lineCommitSha = Nothing
+                            }
+                            : hunkLines hunkBuilder
+                    }
+        Just ('-', lineContent) ->
+            Just
+                hunkBuilder
+                    { nextOldLine = nextOldLine hunkBuilder + 1
+                    , hunkLines =
+                        GitDiffLine
+                            { lineType = DiffDeletionLine
+                            , content = lineContent
+                            , oldLineNumber = Just (nextOldLine hunkBuilder)
+                            , newLineNumber = Nothing
+                            , lineCommitSha = Nothing
+                            }
+                            : hunkLines hunkBuilder
+                    }
+        _ ->
+            Nothing
+
+parseDiffHunkHeader :: Text -> Maybe DiffHunkBuilder
+parseDiffHunkHeader rawHeader =
+    case Text.words rawHeader of
+        ["@@", oldRange, newRange, "@@"] ->
+            buildDiffHunkHeader rawHeader oldRange newRange
+        "@@":oldRange:newRange:"@@":_ ->
+            buildDiffHunkHeader rawHeader oldRange newRange
+        _ ->
+            Nothing
+
+buildDiffHunkHeader :: Text -> Text -> Text -> Maybe DiffHunkBuilder
+buildDiffHunkHeader rawHeader oldRange newRange = do
+    (parsedOldStartLine, parsedOldLineCount) <- parseDiffRange '-' oldRange
+    (parsedNewStartLine, parsedNewLineCount) <- parseDiffRange '+' newRange
+
+    pure
+        DiffHunkBuilder
+            { hunkHeader = rawHeader
+            , hunkOldStartLine = parsedOldStartLine
+            , hunkOldLineCount = parsedOldLineCount
+            , hunkNewStartLine = parsedNewStartLine
+            , hunkNewLineCount = parsedNewLineCount
+            , nextOldLine = parsedOldStartLine
+            , nextNewLine = parsedNewStartLine
+            , hunkLines = []
+            }
+
+parseDiffRange :: Char -> Text -> Maybe (Int, Int)
+parseDiffRange prefix rawRange = do
+    rangeText <- Text.stripPrefix (Text.singleton prefix) rawRange
+    let (startText, countText) = Text.breakOn "," rangeText
+    startLine <- parseIntText startText
+    lineCount <-
+        if Text.null countText
+            then Just 1
+            else parseIntText (Text.drop 1 countText)
+    pure (startLine, lineCount)
+
+parsePatchPath :: Text -> Text
+parsePatchPath rawPath
+    | rawPath == "/dev/null" = ""
+    | "a/" `Text.isPrefixOf` rawPath = Text.drop 2 rawPath
+    | "b/" `Text.isPrefixOf` rawPath = Text.drop 2 rawPath
+    | otherwise = rawPath
+
+parseIntText :: Text -> Maybe Int
+parseIntText = readMaybe . cs
 
 joinTreePath :: Text -> Text -> Text
 joinTreePath currentPath entryName =

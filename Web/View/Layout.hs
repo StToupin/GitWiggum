@@ -54,18 +54,12 @@ stylesheets = [hsx|
 scripts :: Html
 scripts = [hsx|
         {when isDevelopment devScripts}
-        <script src={assetPath "/vendor/jquery-4.0.0.slim.min.js"}></script>
-        <script src={assetPath "/vendor/timeago.js"}></script>
-        <script src={assetPath "/vendor/popper-2.11.6.min.js"}></script>
-        <script src={assetPath "/vendor/bootstrap-5.3.8/bootstrap.min.js"}></script>
-        <script src={assetPath "/vendor/flatpickr.js"}></script>
+        <script src={assetPath "/vendor/htmx.min.js"}></script>
         <script src={assetPath "/vendor/morphdom-umd.min.js"}></script>
-        <script src={assetPath "/vendor/turbolinks.js"}></script>
-        <script src={assetPath "/vendor/turbolinksInstantClick.js"}></script>
-        <script src={assetPath "/vendor/turbolinksMorphdom.js"}></script>
-        <script src={assetPath "/helpers.js"}></script>
-        <script src={assetPath "/ihp-auto-refresh.js"}></script>
-        <script src={assetPath "/app.js"}></script>
+        <script src={assetPath "/helpers-htmx.js"}></script>
+        <script src={assetPath "/htmx-instant-click.js"}></script>
+        <script src={assetPath "/ihp-auto-refresh-htmx.js"}></script>
+        <script src={assetPath "/auth-signup.js"}></script>
     |]
 
 devScripts :: Html
