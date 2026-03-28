@@ -1,0 +1,65 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+usage() {
+    cat <<'EOF'
+Usage:
+  scripts/gitWiggum rgh build
+  scripts/gitWiggum rgh capture [--base64]
+  scripts/gitWiggum rgh install-hooks [--quiet]
+EOF
+}
+
+require_subcommand() {
+    if [ "$#" -lt 2 ]; then
+        usage >&2
+        exit 1
+    fi
+}
+
+rgh_build() {
+    bash -n \
+        "$repo_root/scripts/gitWiggum" \
+        "$repo_root/scripts/install-hooks.sh" \
+        "$repo_root/.githooks/pre-commit" \
+        "$repo_root/.githooks/commit-msg"
+    node --check "$repo_root/scripts/rgh-capture.js"
+    echo "rgh build ok"
+}
+
+rgh_capture() {
+    node "$repo_root/scripts/rgh-capture.js" "$@"
+}
+
+rgh_install_hooks() {
+    "$repo_root/scripts/install-hooks.sh" "$@"
+}
+
+main() {
+    require_subcommand "$@"
+
+    local namespace="$1"
+    local command="$2"
+    shift 2
+
+    case "$namespace:$command" in
+        rgh:build)
+            rgh_build "$@"
+            ;;
+        rgh:capture)
+            rgh_capture "$@"
+            ;;
+        rgh:install-hooks)
+            rgh_install_hooks "$@"
+            ;;
+        *)
+            usage >&2
+            exit 1
+            ;;
+    esac
+}
+
+main "$@"
