@@ -6,4 +6,11 @@ import Web.View.Dashboard.Index
 instance Controller DashboardController where
     beforeAction = ensureIsUser
 
-    action DashboardAction = render IndexView
+    action DashboardAction = do
+        repositories <-
+            query @Repository
+                |> filterWhere (#ownerUserId, get #id currentUser)
+                |> orderByDesc #createdAt
+                |> fetch
+
+        render IndexView { repositories }

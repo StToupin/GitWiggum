@@ -38,6 +38,10 @@ data DashboardController
     = DashboardAction
     deriving (Eq, Show, Data)
 
+data RepositoriesController
+    = NewRepositoryAction
+    deriving (Eq, Show, Data)
+
 type instance CurrentUserRecord = User
 
 instance HasNewSessionUrl User where
