@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+repo_root="$(git rev-parse --show-toplevel)"
+git_dir="$(git rev-parse --git-dir)"
+
+case "$git_dir" in
+    /*) ;;
+    *) git_dir="$repo_root/$git_dir" ;;
+esac
+
+capture_dir="$git_dir/gitwiggum"
+capture_json="$capture_dir/codex-capture.json"
+capture_b64="$capture_dir/codex-capture.b64"
+
+mkdir -p "$capture_dir"
+rm -f "$capture_json" "$capture_b64"
+
+if [ -x "$repo_root/scripts/format-haskell.sh" ]; then
+    "$repo_root/scripts/format-haskell.sh" --staged
+fi
+
+if "$repo_root/scripts/gitWiggum" rgh capture >"$capture_json" 2>/dev/null; then
+    base64 <"$capture_json" | tr -d '\n' >"$capture_b64"
+else
+    rm -f "$capture_json" "$capture_b64"
+fi

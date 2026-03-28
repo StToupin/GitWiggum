@@ -15,5 +15,8 @@ format-haskell:
 check-haskell-format:
     direnv exec . ./scripts/check-haskell-format.sh
 
+install-hooks:
+    direnv exec . ./scripts/install-hooks.sh
+
 deploy:
     direnv exec . ./scripts/workflows/deploy.sh
