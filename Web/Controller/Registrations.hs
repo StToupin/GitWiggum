@@ -17,12 +17,13 @@ instance Controller RegistrationsController where
         render NewView { user }
 
     action CreateRegistrationAction = do
+        let email = normalizeEmail (param @Text "email")
         let password = param @Text "password"
         passwordHash <- hashPassword password
 
         user <-
             newRecord @User
-                |> set #email (param @Text "email")
+                |> set #email email
                 |> set #username (param @Text "username")
                 |> set #passwordHash passwordHash
                 |> validateField #email nonEmpty
@@ -53,3 +54,5 @@ instance Controller RegistrationsController where
             isJust (getValidationFailure #email user)
                 || isJust (getValidationFailure #username user)
                 || isJust (getValidationFailure #passwordHash user)
+
+        normalizeEmail = Text.toLower . Text.strip

@@ -7,3 +7,5 @@ import Web.Types
 instance AutoRoute StaticController
 instance AutoRoute RegistrationsController
 instance AutoRoute ConfirmationsController
+instance AutoRoute SessionsController
+instance AutoRoute DashboardController
