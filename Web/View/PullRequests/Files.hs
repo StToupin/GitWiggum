@@ -97,6 +97,7 @@ renderDiffHunk askAiPath pullRequest headSha jobsByFingerprint diffFilePath GitD
 renderDiffLine :: Text -> PullRequest -> Maybe Text -> Map.Map Text DiffAiResponseJob -> Text -> GitDiffLine -> Html
 renderDiffLine askAiPath pullRequest headSha jobsByFingerprint diffFilePath diffLine@GitDiffLine { lineType, content, oldLineNumber, newLineNumber } =
     let maybeLocation = diffAiLocation diffFilePath diffLine
+        promptContextId = diffPromptContextId diffFilePath diffLine
         maybeFingerprint =
             case (headSha, maybeLocation) of
                 (Just currentHeadSha, Just location) ->
@@ -117,12 +118,62 @@ renderDiffLine askAiPath pullRequest headSha jobsByFingerprint diffFilePath diff
                 <td class="font-monospace align-top">
                     <div class="d-flex align-items-start justify-content-between gap-3">
                         <pre class="mb-0 bg-transparent border-0 p-0 flex-grow-1"><code>{diffLinePrefix lineType}{content}</code></pre>
-                        {renderAskAiAction askAiPath maybeSlotId maybeLocation}
+                        <div class="d-inline-flex align-items-start gap-2">
+                            {renderPromptContextAction promptContextId}
+                            {renderAskAiAction askAiPath maybeSlotId maybeLocation}
+                        </div>
                     </div>
                 </td>
             </tr>
+            {renderPromptContextRow promptContextId diffFilePath diffLine}
             {renderDiffAiResponseSlotRow maybeSlotId maybeDiffAiJob}
         </hsx-fragment>
+    |]
+
+renderPromptContextAction :: Text -> Html
+renderPromptContextAction promptContextId = [hsx|
+    <button
+        class="btn btn-outline-secondary btn-sm"
+        type="button"
+        aria-controls={promptContextId}
+        aria-expanded="false"
+        data-posthog-id="pull-request-diff-prompt-context"
+        onclick={"const panel = document.getElementById('" <> promptContextId <> "'); if (!panel) return; const isHidden = panel.classList.toggle('d-none'); this.setAttribute('aria-expanded', isHidden ? 'false' : 'true');"}
+    >
+        Prompt context
+    </button>
+|]
+
+renderPromptContextRow :: Text -> Text -> GitDiffLine -> Html
+renderPromptContextRow promptContextId diffFilePath diffLine =
+    let promptPreview = buildPromptContextPrompt diffFilePath diffLine
+        thinkingPreview = buildPromptThinkingContext diffLine
+     in [hsx|
+        <tr id={promptContextId} class="table-light d-none" data-prompt-context-slot="true">
+            <td></td>
+            <td></td>
+            <td>
+                <div class="border rounded-3 bg-white p-3 my-2">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-3">
+                        <div>
+                            <div class="text-uppercase small fw-semibold text-secondary">Prompt context</div>
+                            <div class="small text-secondary">UI-only preview for line-level AI provenance.</div>
+                        </div>
+                        <span class="badge text-bg-light">Fizz Buzz prompt</span>
+                    </div>
+                    <div class="d-flex flex-column gap-3">
+                        <div>
+                            <div class="text-uppercase small fw-semibold text-secondary mb-1">Prompt</div>
+                            <pre class="mb-0 bg-transparent border rounded-2 p-3 text-wrap"><code>{promptPreview}</code></pre>
+                        </div>
+                        <div>
+                            <div class="text-uppercase small fw-semibold text-secondary mb-1">AI thinking context</div>
+                            <pre class="mb-0 bg-transparent border rounded-2 p-3 text-wrap"><code>{thinkingPreview}</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </td>
+        </tr>
     |]
 
 renderAskAiAction :: Text -> Maybe Text -> Maybe DiffAI.DiffAiLocation -> Html
@@ -275,9 +326,57 @@ diffAiSlotId :: Text -> Text
 diffAiSlotId fingerprint =
     "diff-ai-response-slot-" <> sanitizeDomIdPart fingerprint
 
+diffPromptContextId :: Text -> GitDiffLine -> Text
+diffPromptContextId diffFilePath GitDiffLine { lineType, oldLineNumber, newLineNumber } =
+    "prompt-context-"
+        <> sanitizeDomIdPart diffFilePath
+        <> "-"
+        <> diffLineTypeToken lineType
+        <> "-"
+        <> tshow (fromMaybe 0 oldLineNumber)
+        <> "-"
+        <> tshow (fromMaybe 0 newLineNumber)
+
+diffLineTypeToken :: GitDiffLineType -> Text
+diffLineTypeToken DiffContextLine = "context"
+diffLineTypeToken DiffAdditionLine = "addition"
+diffLineTypeToken DiffDeletionLine = "deletion"
+
 sanitizeDomIdPart :: Text -> Text
 sanitizeDomIdPart =
-    Text.map (\char -> if Char.isAlphaNum char then char else '-')
+    Text.map (\char -> if Char.isAlphaNum char then Char.toLower char else '-')
+
+buildPromptContextPrompt :: Text -> GitDiffLine -> Text
+buildPromptContextPrompt diffFilePath diffLine =
+    Text.unlines
+        [ "Generate or refine the Fizz Buzz implementation touched by this diff line."
+        , ""
+        , "File: " <> diffFilePath
+        , "Target line: " <> promptContextLineLabel diffLine
+        , "Line content: " <> diffLinePrefix (lineType diffLine) <> content diffLine
+        , ""
+        , "Keep the surrounding style intact, make the logic easy to review, and preserve predictable Fizz Buzz output."
+        ]
+
+buildPromptThinkingContext :: GitDiffLine -> Text
+buildPromptThinkingContext diffLine =
+    Text.unlines
+        [ "- Focus on why this line exists in the Fizz Buzz flow, not just what it does."
+        , "- Check whether the line affects divisibility rules, emitted tokens, or output formatting."
+        , "- Explain reviewer-relevant tradeoffs before suggesting any rewrite."
+        , "- Use this diff line as the anchor: " <> diffLinePrefix (lineType diffLine) <> content diffLine
+        ]
+
+promptContextLineLabel :: GitDiffLine -> Text
+promptContextLineLabel GitDiffLine { lineType, oldLineNumber, newLineNumber } =
+    case lineType of
+        DiffAdditionLine -> "new:" <> tshow (fromMaybe 0 newLineNumber)
+        DiffDeletionLine -> "old:" <> tshow (fromMaybe 0 oldLineNumber)
+        DiffContextLine ->
+            "old:"
+                <> tshow (fromMaybe 0 oldLineNumber)
+                <> " new:"
+                <> tshow (fromMaybe 0 newLineNumber)
 
 renderLineNumber :: Maybe Int -> Text
 renderLineNumber =

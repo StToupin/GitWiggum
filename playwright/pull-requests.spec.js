@@ -283,7 +283,11 @@ test('pull request files tab renders the merge base diff', async ({ page }) => {
   await page.getByRole('link', { name: 'Files', exact: true }).click();
 
   await expect(page).toHaveURL(new RegExp(`/${username}/${repositoryName}/pull-requests/1/files$`));
-  await expect(page.getByText('src/feature.txt')).toBeVisible();
-  await expect(page.getByText('+feature-only line')).toBeVisible();
+  await expect(page.getByText('src/feature.txt', { exact: true })).toBeVisible();
+  await expect(page.getByText('+feature-only line', { exact: true })).toBeVisible();
   await expect(page.getByText('README.md', { exact: true })).not.toBeVisible();
+  await page.getByRole('button', { name: 'Prompt context' }).first().click();
+  await expect(page.getByText('UI-only preview for line-level AI provenance.')).toBeVisible();
+  await expect(page.getByText('Generate or refine the Fizz Buzz implementation touched by this diff line.')).toBeVisible();
+  await expect(page.getByText('AI thinking context')).toBeVisible();
 });
