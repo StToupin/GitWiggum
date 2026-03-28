@@ -25,15 +25,23 @@ instance View ShowView where
                 </div>
 
                 <div class="row g-4 mb-4">
-                    <div class="col-12 col-md-4">
+                    <div class="col-12 col-md-6 col-xl-3">
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-body p-4">
-                                <div class="text-uppercase small fw-semibold text-secondary mb-2">Default branch</div>
+                                <div class="text-uppercase small fw-semibold text-secondary mb-2">Selected branch</div>
                                 <div class="fs-4 fw-semibold">{get #defaultBranch repository}</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-4">
+                    <div class="col-12 col-md-6 col-xl-3">
+                        <div class="card shadow-sm border-0 h-100">
+                            <div class="card-body p-4">
+                                <div class="text-uppercase small fw-semibold text-secondary mb-2">Current path</div>
+                                <div class="fs-5 fw-semibold"><code>{currentPathLabel}</code></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-12 col-md-6 col-xl-3">
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-body p-4">
                                 <div class="text-uppercase small fw-semibold text-secondary mb-2">Latest commit</div>
@@ -41,7 +49,7 @@ instance View ShowView where
                             </div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-4">
+                    <div class="col-12 col-md-6 col-xl-3">
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-body p-4">
                                 <div class="text-uppercase small fw-semibold text-secondary mb-2">Root entries</div>
@@ -67,6 +75,9 @@ latestCommitLabel repository =
         |> get #latestCommitSha
         |> fromMaybe "Pending"
         |> Text.take 10
+
+currentPathLabel :: Text
+currentPathLabel = "/"
 
 renderRootEntry :: Text -> Html
 renderRootEntry entry = [hsx|<span class="badge text-bg-light">{entry}</span>|]

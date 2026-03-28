@@ -151,3 +151,28 @@ test('repository shell keeps repository context across browser, pull requests, a
   await expect(page.getByRole('heading', { name: `${username}/${repositoryName}` })).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Repository root' })).toBeVisible();
 });
+
+test('browser root shows selected default branch and current path', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const email = `repo-browser-${suffix}@example.com`;
+  const username = `repo-browser-${suffix}`;
+  const repositoryName = `browser-${suffix}`;
+
+  await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
+  await createRepository(page, {
+    repositoryName,
+    description: 'Browser root route smoke test',
+    visibility: 'public',
+  });
+
+  const browserPath = `/${username}/${repositoryName}`;
+  const selectedBranchCard = page.locator('.card').filter({ hasText: 'Selected branch' });
+  const currentPathCard = page.locator('.card').filter({ hasText: 'Current path' });
+
+  await expect(page).toHaveURL(new RegExp(`${browserPath}$`));
+  await expect(page.getByRole('heading', { name: `${username}/${repositoryName}` })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Repository root' })).toBeVisible();
+  await expect(selectedBranchCard.getByText('main', { exact: true })).toBeVisible();
+  await expect(currentPathCard.locator('code')).toHaveText('/');
+  expect(page.url()).not.toContain('?');
+});
