@@ -2,11 +2,13 @@ module Web.Controller.Registrations where
 
 import qualified Data.Char as Char
 import qualified Data.Text as Text
+import IHP.AuthSupport.Confirm (sendConfirmationMail)
 import IHP.AuthSupport.Authentication (hashPassword)
 import IHP.ValidationSupport.Types (attachFailure, getValidationFailure, isFailure)
 import IHP.ValidationSupport.ValidateField (hasMinLength, isEmail, isSlug, nonEmpty, validateField)
 import IHP.ValidationSupport.ValidateIsUnique (validateIsUnique, validateIsUniqueCaseInsensitive)
 import Web.Controller.Prelude
+import Web.Mail.Users.Confirmation ()
 import Web.View.Registrations.New
 
 instance Controller RegistrationsController where
@@ -34,7 +36,8 @@ instance Controller RegistrationsController where
         if hasRegistrationErrors user
             then render NewView { user }
             else do
-                user |> createRecord
+                savedUser <- user |> createRecord
+                sendConfirmationMail savedUser
                 setSuccessMessage "Account created. Confirm your email before signing in."
                 redirectTo HomeAction
       where

@@ -15,3 +15,7 @@ data RegistrationsController
     = NewRegistrationAction
     | CreateRegistrationAction
     deriving (Eq, Show, Data)
+
+data ConfirmationsController
+    = ConfirmUserAction { userId :: !(Id User), confirmationToken :: !Text }
+    deriving (Eq, Show, Data)
