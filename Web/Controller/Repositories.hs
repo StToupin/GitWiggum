@@ -134,6 +134,7 @@ renderBrowserView ::
     Text ->
     IO ()
 renderBrowserView owner repository branchName currentPath = do
+    availableBranches <- liftIO $ listRepositoryBranches owner repository
     treeEntries <- liftIO $ listRepositoryTree owner repository branchName currentPath
 
     readmeContent <-
@@ -147,6 +148,7 @@ renderBrowserView owner repository branchName currentPath = do
             , repository
             , branchName
             , currentPath
+            , availableBranches
             , treeEntries
             , readmeContent
             }

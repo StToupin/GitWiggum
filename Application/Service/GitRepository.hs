@@ -3,6 +3,7 @@ module Application.Service.GitRepository
     , GitTreeEntryType (..)
     , cleanupRepositoryOnDisk
     , initializeRepositoryOnDisk
+    , listRepositoryBranches
     , listRepositoryTree
     , readRepositoryFile
     , repositoryBarePath
@@ -78,6 +79,17 @@ repositoryBarePath owner repository = do
             </> "repositories"
             </> cs (get #username owner)
             </> (cs (get #name repository) <.> "git")
+
+listRepositoryBranches :: User -> Repository -> IO [Text]
+listRepositoryBranches owner repository = do
+    branches <- readGitOutputMaybe owner repository ["for-each-ref", "--format=%(refname:short)", "refs/heads"]
+
+    pure $
+        branches
+            |> fromMaybe ""
+            |> Text.lines
+            |> filter (not . Text.null)
+            |> List.sort
 
 listRepositoryTree :: User -> Repository -> Text -> Text -> IO [GitTreeEntry]
 listRepositoryTree owner repository branchName currentPath = do
