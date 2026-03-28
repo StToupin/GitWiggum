@@ -1,4 +1,5 @@
 module Web.Routes where
+import qualified Data.Text as Text
 import IHP.RouterPrelude
 import Generated.Types
 import Web.Types
@@ -15,6 +16,7 @@ instance AutoRoute RepositoriesController where
     customRoutes =
         repositoryPullRequestsRoute
             <|> repositoryAgentsRoute
+            <|> repositoryTreeRoute
             <|> showRepositoryRoute
       where
         repositoryPullRequestsRoute = do
@@ -37,6 +39,23 @@ instance AutoRoute RepositoriesController where
             onlyAllowMethods [GET, HEAD]
             pure RepositoryAgentsAction { ownerSlug, repositoryName }
 
+        repositoryTreeRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/tree/"
+            branchName <- parseText
+            treePath <-
+                (do
+                    string "/"
+                    remainingText
+                    )
+                    <|> pure ""
+            endOfInput
+            onlyAllowMethods [GET, HEAD]
+            pure RepositoryTreeAction { ownerSlug, repositoryName, branchName, treePath }
+
         showRepositoryRoute = do
             string "/"
             ownerSlug <- parseText
@@ -48,8 +67,15 @@ instance AutoRoute RepositoriesController where
 
     customPathTo ShowRepositoryAction { ownerSlug, repositoryName } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName)
+    customPathTo RepositoryTreeAction { ownerSlug, repositoryName, branchName, treePath } =
+        Just
+            ("/" <> ownerSlug <> "/" <> repositoryName <> "/tree/" <> branchName <> treePathSuffix treePath)
     customPathTo RepositoryPullRequestsAction { ownerSlug, repositoryName } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests")
     customPathTo RepositoryAgentsAction { ownerSlug, repositoryName } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/agents")
     customPathTo _ = Nothing
+
+treePathSuffix :: Text -> Text
+treePathSuffix treePath =
+    if Text.null treePath then "" else "/" <> treePath

@@ -1,5 +1,6 @@
 module Web.View.Repositories.Show where
 
+import Application.Service.GitRepository
 import qualified Data.Text as Text
 import Web.View.Prelude
 import Web.View.Repositories.Shell
@@ -7,12 +8,14 @@ import Web.View.Repositories.Shell
 data ShowView = ShowView
     { owner :: User
     , repository :: Repository
+    , branchName :: Text
+    , currentPath :: Text
+    , treeEntries :: [GitTreeEntry]
     , readmeContent :: Maybe Text
-    , rootEntries :: [Text]
     }
 
 instance View ShowView where
-    html ShowView { owner, repository, readmeContent, rootEntries } =
+    html ShowView { owner, repository, branchName, currentPath, treeEntries, readmeContent } =
         renderRepositoryShell owner repository BrowserTab [hsx|
                 <div class="card shadow-sm border-0 mb-4">
                     <div class="card-body p-4">
@@ -25,23 +28,23 @@ instance View ShowView where
                 </div>
 
                 <div class="row g-4 mb-4">
-                    <div class="col-12 col-md-6 col-xl-3">
+                    <div class="col-12 col-md-4">
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-body p-4">
                                 <div class="text-uppercase small fw-semibold text-secondary mb-2">Selected branch</div>
-                                <div class="fs-4 fw-semibold">{get #defaultBranch repository}</div>
+                                <div class="fs-4 fw-semibold">{branchName}</div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-6 col-xl-3">
+                    <div class="col-12 col-md-4">
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-body p-4">
                                 <div class="text-uppercase small fw-semibold text-secondary mb-2">Current path</div>
-                                <div class="fs-5 fw-semibold"><code>{currentPathLabel}</code></div>
+                                <div class="fs-5 fw-semibold"><code>{currentPathLabel currentPath}</code></div>
                             </div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-6 col-xl-3">
+                    <div class="col-12 col-md-4">
                         <div class="card shadow-sm border-0 h-100">
                             <div class="card-body p-4">
                                 <div class="text-uppercase small fw-semibold text-secondary mb-2">Latest commit</div>
@@ -49,25 +52,41 @@ instance View ShowView where
                             </div>
                         </div>
                     </div>
-                    <div class="col-12 col-md-6 col-xl-3">
-                        <div class="card shadow-sm border-0 h-100">
-                            <div class="card-body p-4">
-                                <div class="text-uppercase small fw-semibold text-secondary mb-2">Root entries</div>
-                                <div class="d-flex flex-wrap gap-2">
-                                    {forEach rootEntries renderRootEntry}
-                                </div>
+                </div>
+
+                <div class="card shadow-sm border-0 mb-4">
+                    <div class="card-body p-4">
+                        <div class="d-flex flex-wrap align-items-center justify-content-between gap-3 mb-3">
+                            <div>
+                                <div class="text-uppercase small fw-semibold text-secondary mb-2">Directory explorer</div>
+                                <h2 class="h5 mb-0">{currentPathLabel currentPath}</h2>
                             </div>
+                            <span class="badge text-bg-light">{tshow (length treeEntries)} entries</span>
+                        </div>
+
+                        <div class="d-grid gap-2">
+                            {if null treeEntries then emptyDirectoryState else forEach treeEntries (renderTreeEntry owner repository branchName)}
                         </div>
                     </div>
                 </div>
 
+                {renderReadmePreview readmeContent}
+        |]
+
+currentPathLabel :: Text -> Text
+currentPathLabel currentPath =
+    if Text.null currentPath then "/" else "/" <> currentPath
+
+renderReadmePreview :: Maybe Text -> Html
+renderReadmePreview Nothing = mempty
+renderReadmePreview (Just readmeContent) = [hsx|
                 <div class="card shadow-sm border-0">
                     <div class="card-body p-4">
                         <div class="text-uppercase small fw-semibold text-secondary mb-2">README.md</div>
-                        <pre class="bg-body-tertiary rounded-3 p-3 mb-0"><code>{fromMaybe "README.md is not available yet." readmeContent}</code></pre>
+                        <pre class="bg-body-tertiary rounded-3 p-3 mb-0"><code>{readmeContent}</code></pre>
                     </div>
                 </div>
-        |]
+|]
 
 latestCommitLabel :: Repository -> Text
 latestCommitLabel repository =
@@ -76,8 +95,37 @@ latestCommitLabel repository =
         |> fromMaybe "Pending"
         |> Text.take 10
 
-currentPathLabel :: Text
-currentPathLabel = "/"
+emptyDirectoryState :: Html
+emptyDirectoryState = [hsx|
+    <div class="border rounded-3 p-3 text-secondary">
+        This directory is empty.
+    </div>
+|]
 
-renderRootEntry :: Text -> Html
-renderRootEntry entry = [hsx|<span class="badge text-bg-light">{entry}</span>|]
+renderTreeEntry :: User -> Repository -> Text -> GitTreeEntry -> Html
+renderTreeEntry owner repository branchName GitTreeEntry { entryName, entryPath, entryType } =
+    let folderPath =
+            pathTo
+                RepositoryTreeAction
+                    { ownerSlug = get #username owner
+                    , repositoryName = get #name repository
+                    , branchName
+                    , treePath = entryPath
+                    }
+     in case entryType of
+            TreeEntryDirectory -> [hsx|
+                <a
+                    class="border rounded-3 p-3 d-flex align-items-center justify-content-between gap-3 text-decoration-none"
+                    href={folderPath}
+                    data-posthog-id="repository-browser-folder"
+                >
+                    <span class="fw-semibold">{entryName}</span>
+                    <span class="badge text-bg-light">Folder</span>
+                </a>
+            |]
+            TreeEntryFile -> [hsx|
+                <div class="border rounded-3 p-3 d-flex align-items-center justify-content-between gap-3">
+                    <span class="fw-semibold">{entryName}</span>
+                    <span class="badge text-bg-light">File</span>
+                </div>
+            |]

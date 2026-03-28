@@ -1,8 +1,10 @@
 module Application.Service.GitRepository
-    ( cleanupRepositoryOnDisk
+    ( GitTreeEntry (..)
+    , GitTreeEntryType (..)
+    , cleanupRepositoryOnDisk
     , initializeRepositoryOnDisk
-    , readRepositoryFileFromDefaultBranch
-    , readRepositoryRootEntries
+    , listRepositoryTree
+    , readRepositoryFile
     , repositoryBarePath
     ) where
 
@@ -22,6 +24,19 @@ import System.Exit (ExitCode (..))
 import System.FilePath ((</>), (<.>), takeDirectory)
 import System.IO.Temp (withSystemTempDirectory)
 import System.Process (CreateProcess (cwd), proc, readCreateProcessWithExitCode)
+
+data GitTreeEntryType
+    = TreeEntryDirectory
+    | TreeEntryFile
+    deriving (Eq, Show)
+
+data GitTreeEntry = GitTreeEntry
+    { entryName :: Text
+    , entryPath :: Text
+    , entryType :: GitTreeEntryType
+    , entryObjectSha :: Text
+    }
+    deriving (Eq, Show)
 
 initializeRepositoryOnDisk :: User -> Repository -> IO Text
 initializeRepositoryOnDisk owner repository = do
@@ -64,18 +79,24 @@ repositoryBarePath owner repository = do
             </> cs (get #username owner)
             </> (cs (get #name repository) <.> "git")
 
-readRepositoryRootEntries :: User -> Repository -> IO [Text]
-readRepositoryRootEntries owner repository = do
-    entries <- readGitOutputMaybe owner repository ["ls-tree", "--name-only", cs (get #defaultBranch repository)]
+listRepositoryTree :: User -> Repository -> Text -> Text -> IO [GitTreeEntry]
+listRepositoryTree owner repository branchName currentPath = do
+    let treeReference =
+            if Text.null currentPath
+                then branchName
+                else branchName <> ":" <> currentPath
+
+    entries <- readGitOutputMaybe owner repository ["ls-tree", cs treeReference]
+
     pure $
         entries
             |> fromMaybe ""
             |> Text.lines
-            |> filter (not . Text.null)
+            |> mapMaybe (parseTreeEntry currentPath)
 
-readRepositoryFileFromDefaultBranch :: User -> Repository -> FilePath -> IO (Maybe Text)
-readRepositoryFileFromDefaultBranch owner repository filePath =
-    readGitOutputMaybe owner repository ["show", cs (get #defaultBranch repository) <> ":" <> filePath]
+readRepositoryFile :: User -> Repository -> Text -> Text -> IO (Maybe Text)
+readRepositoryFile owner repository branchName filePath =
+    readGitOutputMaybe owner repository ["show", cs (branchName <> ":" <> filePath)]
 
 initialReadme :: Repository -> Text
 initialReadme repository =
@@ -105,3 +126,36 @@ runGit workingDirectory args = do
         ExitFailure _ ->
             Exception.throwIO
                 (userError ("git " <> List.intercalate " " args <> " failed: " <> stderr))
+
+parseTreeEntry :: Text -> Text -> Maybe GitTreeEntry
+parseTreeEntry currentPath line = do
+    (metadata, entryName) <- splitTreeLine line
+    (_mode, entryType, objectSha) <- parseTreeMetadata metadata
+
+    pure
+        GitTreeEntry
+            { entryName
+            , entryPath = joinTreePath currentPath entryName
+            , entryType
+            , entryObjectSha = objectSha
+            }
+
+splitTreeLine :: Text -> Maybe (Text, Text)
+splitTreeLine line =
+    case Text.breakOn "\t" line of
+        (metadata, entryName)
+            | Text.null entryName -> Nothing
+            | otherwise -> Just (metadata, Text.drop 1 entryName)
+
+parseTreeMetadata :: Text -> Maybe (Text, GitTreeEntryType, Text)
+parseTreeMetadata metadata =
+    case Text.words metadata of
+        [mode, "tree", objectSha] -> Just (mode, TreeEntryDirectory, objectSha)
+        [mode, "blob", objectSha] -> Just (mode, TreeEntryFile, objectSha)
+        _ -> Nothing
+
+joinTreePath :: Text -> Text -> Text
+joinTreePath currentPath entryName =
+    if Text.null currentPath
+        then entryName
+        else currentPath <> "/" <> entryName

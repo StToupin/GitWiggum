@@ -55,11 +55,11 @@ instance Controller RepositoriesController where
 
     action ShowRepositoryAction { ownerSlug, repositoryName } = do
         (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
+        renderBrowserView owner repository (get #defaultBranch repository) ""
 
-        readmeContent <- liftIO $ readRepositoryFileFromDefaultBranch owner repository "README.md"
-        rootEntries <- liftIO $ readRepositoryRootEntries owner repository
-
-        render ShowView { owner, repository, readmeContent, rootEntries }
+    action RepositoryTreeAction { ownerSlug, repositoryName, branchName, treePath } = do
+        (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
+        renderBrowserView owner repository branchName treePath
 
     action RepositoryPullRequestsAction { ownerSlug, repositoryName } = do
         (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
@@ -125,3 +125,28 @@ fetchRepositoryContext ownerSlug repositoryName = do
             |> fetchOne
 
     pure (owner, repository)
+
+renderBrowserView ::
+    (?context :: ControllerContext, ?modelContext :: ModelContext, ?request :: Request, ?respond :: Respond) =>
+    User ->
+    Repository ->
+    Text ->
+    Text ->
+    IO ()
+renderBrowserView owner repository branchName currentPath = do
+    treeEntries <- liftIO $ listRepositoryTree owner repository branchName currentPath
+
+    readmeContent <-
+        if Text.null currentPath
+            then liftIO $ readRepositoryFile owner repository branchName "README.md"
+            else pure Nothing
+
+    render
+        ShowView
+            { owner
+            , repository
+            , branchName
+            , currentPath
+            , treeEntries
+            , readmeContent
+            }
