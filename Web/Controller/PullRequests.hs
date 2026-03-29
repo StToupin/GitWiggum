@@ -111,11 +111,30 @@ instance Controller PullRequestsController where
                             diffAiResponseJob <- DiffAI.enqueueOrReuseDiffAiResponseJob pullRequest headSha location
                             renderFragment
                                 DiffAiResponseRowView
-                                    { diffAiResponseJob }
+                                    { ownerSlug
+                                    , repositoryName
+                                    , pullRequestNumber
+                                    , diffAiResponseJob
+                                    }
                         Nothing ->
                             respondAndExitWithHeaders (WAI.responseLBS HTTP.status422 [] "Could not resolve pull request head SHA")
             _ ->
                 respondAndExitWithHeaders (WAI.responseLBS HTTP.status422 [] "Missing diff AI location")
+
+    action ShowPullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber, diffAiResponseJobId } = do
+        (_owner, _repository, pullRequest, _author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
+        diffAiResponseJob <-
+            query @DiffAiResponseJob
+                |> filterWhere (#id, diffAiResponseJobId)
+                |> filterWhere (#pullRequestId, get #id pullRequest)
+                |> fetchOne
+        renderFragment
+            DiffAiResponseRowView
+                { ownerSlug
+                , repositoryName
+                , pullRequestNumber
+                , diffAiResponseJob
+                }
 
 buildInitialPullRequest :: User -> Repository -> [Text] -> PullRequest
 buildInitialPullRequest currentUser repository availableBranches =

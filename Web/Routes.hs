@@ -52,6 +52,7 @@ instance AutoRoute PullRequestsController where
             <|> showPullRequestConversationRoute
             <|> showPullRequestCommitsRoute
             <|> showPullRequestFilesRoute
+            <|> showPullRequestDiffAiJobRoute
             <|> createPullRequestDiffAiJobRoute
       where
         newPullRequestRoute = do
@@ -110,6 +111,19 @@ instance AutoRoute PullRequestsController where
             onlyAllowMethods [GET, HEAD]
             pure ShowPullRequestFilesAction { ownerSlug, repositoryName, pullRequestNumber }
 
+        showPullRequestDiffAiJobRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/pull-requests/"
+            pullRequestNumber <- parseRouteNumber
+            string "/diff-ai/"
+            diffAiResponseJobId <- parseId
+            endOfInput
+            onlyAllowMethods [GET, HEAD]
+            pure ShowPullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber, diffAiResponseJobId }
+
         createPullRequestDiffAiJobRoute = do
             string "/"
             ownerSlug <- parseText
@@ -132,9 +146,10 @@ instance AutoRoute PullRequestsController where
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/commits")
     customPathTo ShowPullRequestFilesAction { ownerSlug, repositoryName, pullRequestNumber } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/files")
+    customPathTo ShowPullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber, diffAiResponseJobId } =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/diff-ai/" <> tshow diffAiResponseJobId)
     customPathTo CreatePullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber } =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/diff-ai")
-    customPathTo _ = Nothing
 
 instance AutoRoute RepositoriesController where
     customRoutes =

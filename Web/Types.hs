@@ -54,6 +54,7 @@ data PullRequestsController
     | ShowPullRequestCommitsAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
     | ShowPullRequestFilesAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
     | CreatePullRequestDiffAiJobAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
+    | ShowPullRequestDiffAiJobAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int, diffAiResponseJobId :: !(Id DiffAiResponseJob) }
     deriving (Eq, Show, Data)
 
 data RepositoriesController

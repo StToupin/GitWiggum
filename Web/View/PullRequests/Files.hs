@@ -21,18 +21,23 @@ data FilesView = FilesView
     }
 
 data DiffAiResponseRowView = DiffAiResponseRowView
-    {diffAiResponseJob :: DiffAiResponseJob}
+    { ownerSlug :: Text
+    , repositoryName :: Text
+    , pullRequestNumber :: Int
+    , diffAiResponseJob :: DiffAiResponseJob
+    }
 
 instance View FilesView where
     html FilesView{owner, repository, pullRequest, author, diffFiles, diffAiJobs, headSha} =
         let ownerSlug = get #username owner
             repositoryName = get #name repository
+            pullRequestNumber = get #number pullRequest
             askAiPath =
                 pathTo
                     CreatePullRequestDiffAiJobAction
                         { ownerSlug
                         , repositoryName
-                        , pullRequestNumber = get #number pullRequest
+                        , pullRequestNumber
                         }
             jobsByFingerprint =
                 diffAiJobs
@@ -45,12 +50,14 @@ instance View FilesView where
                 author
                 FilesTab
                 [hsx|
-            <div class="d-flex flex-column gap-4">{if null diffFiles then emptyFilesState else forEach diffFiles (renderDiffFile askAiPath pullRequest headSha jobsByFingerprint)}</div>
+            <div class="d-flex flex-column gap-4">{if null diffFiles then emptyFilesState else forEach diffFiles (renderDiffFile ownerSlug repositoryName pullRequestNumber askAiPath pullRequest headSha jobsByFingerprint)}</div>
         |]
 
 instance View DiffAiResponseRowView where
-    html DiffAiResponseRowView{diffAiResponseJob} =
-        renderDiffAiResponseSwapTable (renderDiffAiResponseRow diffAiResponseJob)
+    html DiffAiResponseRowView{ownerSlug, repositoryName, pullRequestNumber, diffAiResponseJob} =
+        [hsx|
+        {renderDiffAiResponseSwapTable (renderDiffAiResponseRow ownerSlug repositoryName pullRequestNumber diffAiResponseJob)}
+    |]
 
 emptyFilesState :: Html
 emptyFilesState =
@@ -65,8 +72,8 @@ emptyFilesState =
     </div>
 |]
 
-renderDiffFile :: Text -> PullRequest -> Maybe Text -> Map.Map Text DiffAiResponseJob -> GitDiffFile -> Html
-renderDiffFile askAiPath pullRequest headSha jobsByFingerprint diffFile@GitDiffFile{hunks} =
+renderDiffFile :: Text -> Text -> Int -> Text -> PullRequest -> Maybe Text -> Map.Map Text DiffAiResponseJob -> GitDiffFile -> Html
+renderDiffFile ownerSlug repositoryName pullRequestNumber askAiPath pullRequest headSha jobsByFingerprint diffFile@GitDiffFile{hunks} =
     let diffFilePath = diffFileRequestPath diffFile
      in [hsx|
     <div class="card shadow-sm border-0">
@@ -86,7 +93,7 @@ renderDiffFile askAiPath pullRequest headSha jobsByFingerprint diffFile@GitDiffF
         <div class="table-responsive">
           <table class="table table-sm align-middle mb-0">
             <tbody>
-              {forEach hunks (renderDiffHunk askAiPath pullRequest headSha jobsByFingerprint diffFilePath)}
+              {forEach hunks (renderDiffHunk ownerSlug repositoryName pullRequestNumber askAiPath pullRequest headSha jobsByFingerprint diffFilePath)}
             </tbody>
           </table>
         </div>
@@ -94,8 +101,8 @@ renderDiffFile askAiPath pullRequest headSha jobsByFingerprint diffFile@GitDiffF
     </div>
 |]
 
-renderDiffHunk :: Text -> PullRequest -> Maybe Text -> Map.Map Text DiffAiResponseJob -> Text -> GitDiffHunk -> Html
-renderDiffHunk askAiPath pullRequest headSha jobsByFingerprint diffFilePath GitDiffHunk{header, lines} =
+renderDiffHunk :: Text -> Text -> Int -> Text -> PullRequest -> Maybe Text -> Map.Map Text DiffAiResponseJob -> Text -> GitDiffHunk -> Html
+renderDiffHunk ownerSlug repositoryName pullRequestNumber askAiPath pullRequest headSha jobsByFingerprint diffFilePath GitDiffHunk{header, lines} =
     [hsx|
     <hsx-fragment>
       <tr class="table-light">
@@ -103,12 +110,12 @@ renderDiffHunk askAiPath pullRequest headSha jobsByFingerprint diffFilePath GitD
         <td class="text-secondary text-end small"><code>-</code></td>
         <td class="font-monospace small"><code>{header}</code></td>
       </tr>
-      {forEach lines (renderDiffLine askAiPath pullRequest headSha jobsByFingerprint diffFilePath)}
+      {forEach lines (renderDiffLine ownerSlug repositoryName pullRequestNumber askAiPath pullRequest headSha jobsByFingerprint diffFilePath)}
     </hsx-fragment>
 |]
 
-renderDiffLine :: Text -> PullRequest -> Maybe Text -> Map.Map Text DiffAiResponseJob -> Text -> GitDiffLine -> Html
-renderDiffLine askAiPath pullRequest headSha jobsByFingerprint diffFilePath diffLine@GitDiffLine{lineType, content, oldLineNumber, newLineNumber} =
+renderDiffLine :: Text -> Text -> Int -> Text -> PullRequest -> Maybe Text -> Map.Map Text DiffAiResponseJob -> Text -> GitDiffLine -> Html
+renderDiffLine ownerSlug repositoryName pullRequestNumber askAiPath pullRequest headSha jobsByFingerprint diffFilePath diffLine@GitDiffLine{lineType, content, oldLineNumber, newLineNumber} =
     let maybeLocation = diffAiLocation diffFilePath diffLine
         promptContextId = diffPromptContextId diffFilePath diffLine
         maybeFingerprint =
@@ -143,7 +150,7 @@ renderDiffLine askAiPath pullRequest headSha jobsByFingerprint diffFilePath diff
               </div>
             </td>
           </tr>
-          {renderPromptContextRow promptContextId diffLine} {renderDiffAiResponseSlotRow maybeSlotId maybeDiffAiJob}
+          {renderPromptContextRow promptContextId diffLine} {renderDiffAiResponseSlotRow ownerSlug repositoryName pullRequestNumber maybeSlotId maybeDiffAiJob}
         </hsx-fragment>
     |]
 
@@ -283,12 +290,12 @@ renderAskAiAction askAiPath (Just slotId) (Just location) =
     </form>
 |]
 
-renderDiffAiResponseSlotRow :: Maybe Text -> Maybe DiffAiResponseJob -> Html
-renderDiffAiResponseSlotRow Nothing _ = mempty
-renderDiffAiResponseSlotRow (Just slotId) maybeDiffAiJob =
+renderDiffAiResponseSlotRow :: Text -> Text -> Int -> Maybe Text -> Maybe DiffAiResponseJob -> Html
+renderDiffAiResponseSlotRow _ _ _ Nothing _ = mempty
+renderDiffAiResponseSlotRow ownerSlug repositoryName pullRequestNumber (Just slotId) maybeDiffAiJob =
     case maybeDiffAiJob of
         Just diffAiResponseJob ->
-            renderDiffAiResponseRow diffAiResponseJob
+            renderDiffAiResponseRow ownerSlug repositoryName pullRequestNumber diffAiResponseJob
         Nothing ->
             renderDiffAiResponseSlotPlaceholder slotId
 
@@ -310,14 +317,17 @@ renderDiffAiResponseSwapTable rowHtml =
     </table>
 |]
 
-renderDiffAiResponseRow :: DiffAiResponseJob -> Html
-renderDiffAiResponseRow diffAiResponseJob =
+renderDiffAiResponseRow :: Text -> Text -> Int -> DiffAiResponseJob -> Html
+renderDiffAiResponseRow ownerSlug repositoryName pullRequestNumber diffAiResponseJob =
     let slotId = diffAiSlotId (get #fingerprint diffAiResponseJob)
+        maybePollAttributes = diffAiPollAttributes ownerSlug repositoryName pullRequestNumber diffAiResponseJob
      in [hsx|
         <tr
           id={slotId}
           class="table-light"
           data-diff-ai-response-slot="true"
+          data-diff-ai-status={diffAiStatusLabel (get #status diffAiResponseJob)}
+          {...maybePollAttributes}
         >
           <td></td>
           <td></td>
@@ -376,6 +386,32 @@ renderDiffAiResponseText diffAiResponseJob =
       class="mb-0 bg-transparent border-0 p-0 text-wrap"
     ><code>{fromMaybe ("" :: Text) (get #response diffAiResponseJob)}</code></pre>
 |]
+
+diffAiPollAttributes :: Text -> Text -> Int -> DiffAiResponseJob -> [(Text, Text)]
+diffAiPollAttributes ownerSlug repositoryName pullRequestNumber diffAiResponseJob =
+    case diffAiPollPath ownerSlug repositoryName pullRequestNumber diffAiResponseJob of
+        Just pollPath ->
+            [ ("hx-get", pollPath)
+            , ("hx-trigger", "every 1s")
+            , ("hx-target", "#" <> diffAiSlotId (get #fingerprint diffAiResponseJob))
+            , ("hx-select", "#" <> diffAiSlotId (get #fingerprint diffAiResponseJob))
+            , ("hx-swap", "outerHTML")
+            ]
+        Nothing ->
+            []
+
+diffAiPollPath :: Text -> Text -> Int -> DiffAiResponseJob -> Maybe Text
+diffAiPollPath ownerSlug repositoryName pullRequestNumber diffAiResponseJob =
+    if get #status diffAiResponseJob `elem` [JobStatusNotStarted, JobStatusRunning, JobStatusRetry]
+        then Just $
+            pathTo
+                ShowPullRequestDiffAiJobAction
+                    { ownerSlug
+                    , repositoryName
+                    , pullRequestNumber
+                    , diffAiResponseJobId = get #id diffAiResponseJob
+                    }
+        else Nothing
 
 diffFileLabel :: GitDiffFile -> Text
 diffFileLabel GitDiffFile{oldPath, newPath}

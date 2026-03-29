@@ -42,6 +42,53 @@ function repositoryBarePath(ownerSlug, repositoryName) {
   return path.join(repoRoot, 'data', 'repositories', ownerSlug, `${repositoryName}.git`);
 }
 
+function buildCodexCaptureBase64({ prompt, thinkingSummary, threadId = 'thread-playwright', sessionFile = '/tmp/codex/session.jsonl' }) {
+  return Buffer.from(
+    JSON.stringify({
+      version: 1,
+      source: 'codex',
+      capturedAt: '2026-03-28T00:00:00.000Z',
+      repoRoot: '/tmp/playwright-repo',
+      threadId,
+      sessionFile,
+      prompt,
+      promptMessages: [
+        {
+          timestamp: '2026-03-28T00:00:00.000Z',
+          text: prompt,
+        },
+      ],
+      thinking: {
+        timestamp: '2026-03-28T00:00:01.000Z',
+        summary: [
+          {
+            type: 'summary_text',
+            text: thinkingSummary,
+          },
+        ],
+        encrypted_content: 'playwright-test-payload',
+      },
+      rawPayload: {
+        latestUserMessage: {
+          timestamp: '2026-03-28T00:00:00.000Z',
+          text: prompt,
+        },
+        latestReasoning: {
+          timestamp: '2026-03-28T00:00:01.000Z',
+          summary: [
+            {
+              type: 'summary_text',
+              text: thinkingSummary,
+            },
+          ],
+          encrypted_content: 'playwright-test-payload',
+        },
+      },
+    }),
+    'utf8',
+  ).toString('base64');
+}
+
 function seedRepositoryBranch({
   ownerSlug,
   repositoryName,
@@ -49,6 +96,7 @@ function seedRepositoryBranch({
   files,
   fromBranch = 'main',
   commitMessage = `Seed ${branch}`,
+  commitTrailers = [],
 }) {
   const barePath = repositoryBarePath(ownerSlug, repositoryName);
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'gitwiggum-pr-branch-'));
@@ -71,7 +119,14 @@ function seedRepositoryBranch({
     }
 
     runGit(['add', '.'], { cwd: cloneDir });
-    runGit(['commit', '-m', commitMessage], { cwd: cloneDir });
+    if (commitTrailers.length > 0) {
+      const commitMessagePath = path.join(tempRoot, 'commit-message.txt');
+      const fullCommitMessage = `${commitMessage}\n\n${commitTrailers.join('\n')}\n`;
+      fs.writeFileSync(commitMessagePath, fullCommitMessage, 'utf8');
+      runGit(['commit', '-F', commitMessagePath], { cwd: cloneDir });
+    } else {
+      runGit(['commit', '-m', commitMessage], { cwd: cloneDir });
+    }
     runGit(['push', 'origin', `HEAD:${branch}`], { cwd: cloneDir });
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
@@ -243,6 +298,8 @@ test('pull request files tab renders the merge base diff', async ({ page }) => {
   const username = `repo-pr-files-${suffix}`;
   const repositoryName = `pr-files-${suffix}`;
   const compareBranch = 'feature-diff';
+  const promptText = 'Generate a Fizz Buzz implementation in Java for the changed line.';
+  const thinkingSummary = 'Trace the new-side blamed commit and explain why the added line belongs in the Fizz Buzz flow.';
 
   await signUpConfirmAndSignIn(page, { email, username, password: 'secret123' });
   await createRepository(page, {
@@ -261,6 +318,7 @@ test('pull request files tab renders the merge base diff', async ({ page }) => {
       'src/feature.txt': 'feature-only line\n',
     },
     commitMessage: 'Seed feature diff',
+    commitTrailers: [`Codex-Context: ${buildCodexCaptureBase64({ prompt: promptText, thinkingSummary })}`],
   });
 
   seedRepositoryBranch({
@@ -287,7 +345,10 @@ test('pull request files tab renders the merge base diff', async ({ page }) => {
   await expect(page.getByText('+feature-only line', { exact: true })).toBeVisible();
   await expect(page.getByText('README.md', { exact: true })).not.toBeVisible();
   await page.getByRole('button', { name: 'Prompt context' }).first().click();
-  await expect(page.getByText('UI-only preview for line-level AI provenance.')).toBeVisible();
-  await expect(page.getByText('Generate or refine the Fizz Buzz implementation touched by this diff line.')).toBeVisible();
-  await expect(page.getByText('AI thinking context')).toBeVisible();
+  const promptContext = page.locator('[data-prompt-context-slot="true"]').filter({ hasText: promptText }).first();
+  await expect(promptContext).toContainText('Commit');
+  await expect(promptContext).toContainText(promptText);
+  await expect(promptContext).toContainText('Thread thread-playwright');
+  await expect(promptContext).toContainText('AI thinking context');
+  await expect(promptContext).toContainText(thinkingSummary);
 });

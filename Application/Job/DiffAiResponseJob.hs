@@ -5,7 +5,6 @@ import qualified Data.Text as Text
 import qualified System.Environment as Environment
 import IHP.ControllerPrelude (fetchOne, query)
 import IHP.Job.Types
-import IHP.ModelSupport (updateRecordDiscardResult)
 import IHP.OpenAI
 import IHP.Prelude
 import IHP.QueryBuilder (filterWhere)
@@ -55,12 +54,14 @@ buildCompletionRequest prompt =
         }
 
 markJobStreamStarted :: (?modelContext :: ModelContext) => DiffAiResponseJob -> IO ()
-markJobStreamStarted diffAiResponseJob =
-    diffAiResponseJob
-        |> set #response (Just "")
-        |> set #dismissed False
-        |> set #lastError Nothing
-        |> updateRecordDiscardResult
+markJobStreamStarted diffAiResponseJob = do
+    _ <-
+        diffAiResponseJob
+            |> set #response (Just "")
+            |> set #dismissed False
+            |> set #lastError Nothing
+            |> updateRecord
+    pure ()
 
 appendChunkToJob :: (?modelContext :: ModelContext) => DiffAiResponseJob -> IORef Text -> CompletionChunk -> IO ()
 appendChunkToJob diffAiResponseJob responseRef completionChunk = do
@@ -78,11 +79,13 @@ persistJobResponse diffAiResponseJob responseText = do
             |> filterWhere (#id, get #id diffAiResponseJob)
             |> fetchOne
 
-    currentJob
-        |> set #response (Just responseText)
-        |> set #dismissed False
-        |> set #lastError Nothing
-        |> updateRecordDiscardResult
+    _ <-
+        currentJob
+            |> set #response (Just responseText)
+            |> set #dismissed False
+            |> set #lastError Nothing
+            |> updateRecord
+    pure ()
 
 extractChunkText :: CompletionChunk -> Text
 extractChunkText CompletionChunk { choices } =
