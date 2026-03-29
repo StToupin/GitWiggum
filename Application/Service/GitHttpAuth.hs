@@ -1,19 +1,17 @@
-module Application.Service.GitHttpAuth
-    ( GitHttpAccessLevel (..)
-    , GitHttpPrincipal (..)
-    , authenticateGitHttpPrincipal
-    , gitHttpAccessLevel
-    , parseBasicAuthorizationHeader
-    ) where
+module Application.Service.GitHttpAuth (
+    GitHttpAccessLevel (..),
+    GitHttpPrincipal (..),
+    authenticateGitHttpPrincipal,
+    gitHttpAccessLevel,
+    parseBasicAuthorizationHeader,
+) where
 
+import Application.Base64 (decodeBase64Bytes)
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as ByteString.Char8
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import qualified Data.Text.Encoding.Error as Text.Encoding.Error
-import Data.Bits ((.&.), (.|.), shiftL, shiftR)
-import Data.Char (ord)
-import Data.Word (Word8)
 import Generated.Types
 import IHP.AuthSupport.Authentication (verifyPassword)
 import IHP.ControllerPrelude (fetchOneOrNothing, query)
@@ -109,48 +107,3 @@ nonEmptyText :: Text -> Maybe Text
 nonEmptyText rawText =
     let strippedText = Text.strip rawText
      in if Text.null strippedText then Nothing else Just strippedText
-
-decodeBase64Bytes :: String -> Either Text ByteString.ByteString
-decodeBase64Bytes encodedBytes
-    | length encodedBytes `mod` 4 /= 0 = Left "Invalid base64 length."
-    | otherwise = ByteString.pack <$> go encodedBytes
-  where
-    go [] = Right []
-    go (char1:char2:char3:char4:remainingChars) = do
-        decodedChunk <- decodeChunk char1 char2 char3 char4
-        (decodedChunk <>) <$> go remainingChars
-    go _ =
-        Left "Invalid base64 payload."
-
-decodeChunk :: Char -> Char -> Char -> Char -> Either Text [Word8]
-decodeChunk char1 char2 '=' '=' = do
-    sextet1 <- decodeBase64Char char1
-    sextet2 <- decodeBase64Char char2
-    pure [fromIntegral ((sextet1 `shiftL` 2) .|. (sextet2 `shiftR` 4))]
-decodeChunk char1 char2 char3 '=' = do
-    sextet1 <- decodeBase64Char char1
-    sextet2 <- decodeBase64Char char2
-    sextet3 <- decodeBase64Char char3
-    pure
-        [ fromIntegral ((sextet1 `shiftL` 2) .|. (sextet2 `shiftR` 4))
-        , fromIntegral (((sextet2 .&. 0x0F) `shiftL` 4) .|. (sextet3 `shiftR` 2))
-        ]
-decodeChunk char1 char2 char3 char4 = do
-    sextet1 <- decodeBase64Char char1
-    sextet2 <- decodeBase64Char char2
-    sextet3 <- decodeBase64Char char3
-    sextet4 <- decodeBase64Char char4
-    pure
-        [ fromIntegral ((sextet1 `shiftL` 2) .|. (sextet2 `shiftR` 4))
-        , fromIntegral (((sextet2 .&. 0x0F) `shiftL` 4) .|. (sextet3 `shiftR` 2))
-        , fromIntegral (((sextet3 .&. 0x03) `shiftL` 6) .|. sextet4)
-        ]
-
-decodeBase64Char :: Char -> Either Text Int
-decodeBase64Char character
-    | character >= 'A' && character <= 'Z' = Right (ord character - ord 'A')
-    | character >= 'a' && character <= 'z' = Right (ord character - ord 'a' + 26)
-    | character >= '0' && character <= '9' = Right (ord character - ord '0' + 52)
-    | character == '+' = Right 62
-    | character == '/' = Right 63
-    | otherwise = Left "Invalid base64 payload."

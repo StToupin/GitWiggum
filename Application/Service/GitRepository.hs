@@ -1,29 +1,30 @@
-module Application.Service.GitRepository
-    ( GitHttpRequest (..)
-    , GitTreeEntry (..)
-    , GitCommitContext (..)
-    , GitPullRequestCommit (..)
-    , GitDiffFile (..)
-    , GitDiffHunk (..)
-    , GitDiffLine (..)
-    , GitDiffLineType (..)
-    , GitTreeEntryType (..)
-    , cleanupRepositoryOnDisk
-    , enableHttpReceivePackOnDisk
-    , initializeRepositoryOnDisk
-    , listPullRequestCommits
-    , listRepositoryBranches
-    , listRepositoryTree
-    , readLatestCommitContext
-    , readPullRequestHeadSha
-    , readPullRequestDiff
-    , readPullRequestRawDiff
-    , readRepositoryFile
-    , readRepositoryPathType
-    , repositoryGitHttpResponse
-    , repositoryBarePath
-    ) where
+module Application.Service.GitRepository (
+    GitHttpRequest (..),
+    GitTreeEntry (..),
+    GitCommitContext (..),
+    GitPullRequestCommit (..),
+    GitDiffFile (..),
+    GitDiffHunk (..),
+    GitDiffLine (..),
+    GitDiffLineType (..),
+    GitTreeEntryType (..),
+    cleanupRepositoryOnDisk,
+    enableHttpReceivePackOnDisk,
+    initializeRepositoryOnDisk,
+    listPullRequestCommits,
+    listRepositoryBranches,
+    listRepositoryTree,
+    readLatestCommitContext,
+    readPullRequestHeadSha,
+    readPullRequestDiff,
+    readPullRequestRawDiff,
+    readRepositoryFile,
+    readRepositoryPathType,
+    repositoryGitHttpResponse,
+    repositoryBarePath,
+) where
 
+import Application.PromptMetadata (PromptMetadata, parsePromptMetadata)
 import qualified Control.Exception as Exception
 import qualified Data.ByteString as ByteString
 import qualified Data.ByteString.Char8 as ByteString.Char8
@@ -31,33 +32,34 @@ import qualified Data.ByteString.Lazy as LazyByteString
 import qualified Data.CaseInsensitive as CaseInsensitive
 import Data.Char (isHexDigit)
 import qualified Data.List as List
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import qualified Data.Text.Encoding as Text.Encoding
 import qualified Data.Text.Encoding.Error as Text.Encoding.Error
 import qualified Data.Text.IO as Text.IO
-import IHP.Prelude
 import Generated.Types
+import IHP.Prelude
 import qualified Network.HTTP.Types as HTTP
 import qualified Network.Wai as WAI
-import System.Directory
-    ( createDirectoryIfMissing
-    , doesPathExist
-    , getCurrentDirectory
-    , removePathForcibly
-    )
+import System.Directory (
+    createDirectoryIfMissing,
+    doesPathExist,
+    getCurrentDirectory,
+    removePathForcibly,
+ )
+import qualified System.Environment as Environment
 import System.Exit (ExitCode (..))
-import System.FilePath ((</>), (<.>), takeDirectory)
+import System.FilePath (takeDirectory, (<.>), (</>))
 import System.IO (hClose, hSetBinaryMode)
 import System.IO.Temp (withSystemTempDirectory)
-import qualified System.Environment as Environment
-import System.Process
-    ( CreateProcess (cwd, env, std_err, std_in, std_out)
-    , StdStream (CreatePipe)
-    , proc
-    , readCreateProcessWithExitCode
-    , waitForProcess
-    , withCreateProcess
-    )
+import System.Process (
+    CreateProcess (cwd, env, std_err, std_in, std_out),
+    StdStream (CreatePipe),
+    proc,
+    readCreateProcessWithExitCode,
+    waitForProcess,
+    withCreateProcess,
+ )
 import Text.Read (readMaybe)
 
 data GitHttpRequest = GitHttpRequest
@@ -125,6 +127,7 @@ data GitDiffLine = GitDiffLine
     , oldLineNumber :: Maybe Int
     , newLineNumber :: Maybe Int
     , lineCommitSha :: Maybe Text
+    , linePromptMetadata :: Maybe PromptMetadata
     }
     deriving (Eq, Show)
 
@@ -216,11 +219,11 @@ listPullRequestCommits owner repository baseBranch compareBranch = do
 readPullRequestDiff :: User -> Repository -> Text -> Text -> IO [GitDiffFile]
 readPullRequestDiff owner repository baseBranch compareBranch = do
     diffText <- readPullRequestRawDiff owner repository baseBranch compareBranch
-
-    pure $
-        diffText
-            |> fromMaybe ""
-            |> parsePullRequestDiff
+    let diffFiles =
+            diffText
+                |> fromMaybe ""
+                |> parsePullRequestDiff
+    attachPromptMetadataToDiffFiles owner repository compareBranch diffFiles
 
 readPullRequestHeadSha :: User -> Repository -> Text -> IO (Maybe Text)
 readPullRequestHeadSha owner repository compareRef =
@@ -246,6 +249,96 @@ readPullRequestRawDiff owner repository baseBranch compareBranch = do
                 , cs mergeBase
                 , cs (gitRevisionRef compareBranch)
                 ]
+
+data GitBlameLine = GitBlameLine
+    { blameCommitSha :: Text
+    , blameLineNumber :: Int
+    }
+    deriving (Eq, Show)
+
+attachPromptMetadataToDiffFiles :: User -> Repository -> Text -> [GitDiffFile] -> IO [GitDiffFile]
+attachPromptMetadataToDiffFiles owner repository compareBranch diffFiles = do
+    blamedFiles <-
+        forM diffFiles \diffFile ->
+            case diffPromptFilePath diffFile of
+                Nothing -> pure (diffFile, Map.empty)
+                Just filePath -> do
+                    blameLines <- blameFileAtRevision owner repository compareBranch filePath
+                    pure (diffFile, Map.fromList (map (\GitBlameLine{blameCommitSha, blameLineNumber} -> (blameLineNumber, blameCommitSha)) blameLines))
+
+    let commitShas =
+            blamedFiles
+                |> concatMap (Map.elems . snd)
+                |> List.nub
+
+    promptMetadataByCommit <- loadPromptMetadataByCommit owner repository commitShas
+
+    pure $
+        blamedFiles
+            |> map (\(diffFile, blameIndex) -> attachPromptMetadataToDiffFile blameIndex promptMetadataByCommit diffFile)
+
+diffPromptFilePath :: GitDiffFile -> Maybe Text
+diffPromptFilePath GitDiffFile{newPath}
+    | Text.null newPath = Nothing
+    | otherwise = Just newPath
+
+blameFileAtRevision :: User -> Repository -> Text -> Text -> IO [GitBlameLine]
+blameFileAtRevision owner repository revision filePath = do
+    blameOutput <-
+        readGitOutputMaybe
+            owner
+            repository
+            [ "blame"
+            , "--line-porcelain"
+            , cs (gitRevisionRef revision)
+            , "--"
+            , cs filePath
+            ]
+
+    pure $
+        blameOutput
+            |> fromMaybe ""
+            |> parseBlamePorcelain
+
+loadPromptMetadataByCommit :: User -> Repository -> [Text] -> IO (Map.Map Text PromptMetadata)
+loadPromptMetadataByCommit owner repository commitShas = do
+    commitMetadataPairs <-
+        forM commitShas \commitSha -> do
+            maybeCommitMessage <- readGitOutputMaybe owner repository ["show", "-s", "--format=%B", cs commitSha]
+            pure $
+                case maybeCommitMessage >>= parsePromptMetadata of
+                    Just promptMetadata -> Just (commitSha, promptMetadata)
+                    Nothing -> Nothing
+
+    pure (Map.fromList (mapMaybe (\pair -> pair) commitMetadataPairs))
+
+attachPromptMetadataToDiffFile :: Map.Map Int Text -> Map.Map Text PromptMetadata -> GitDiffFile -> GitDiffFile
+attachPromptMetadataToDiffFile blameIndex promptMetadataByCommit diffFile@GitDiffFile{hunks} =
+    diffFile
+        { hunks =
+            hunks
+                |> map (attachPromptMetadataToDiffHunk blameIndex promptMetadataByCommit)
+        }
+
+attachPromptMetadataToDiffHunk :: Map.Map Int Text -> Map.Map Text PromptMetadata -> GitDiffHunk -> GitDiffHunk
+attachPromptMetadataToDiffHunk blameIndex promptMetadataByCommit diffHunk@GitDiffHunk{lines} =
+    diffHunk
+        { lines =
+            lines
+                |> map (attachPromptMetadataToDiffLine blameIndex promptMetadataByCommit)
+        }
+
+attachPromptMetadataToDiffLine :: Map.Map Int Text -> Map.Map Text PromptMetadata -> GitDiffLine -> GitDiffLine
+attachPromptMetadataToDiffLine blameIndex promptMetadataByCommit diffLine@GitDiffLine{newLineNumber} =
+    case newLineNumber of
+        Just lineNumber ->
+            let maybeCommitSha = Map.lookup lineNumber blameIndex
+             in diffLine
+                    { lineCommitSha = maybeCommitSha
+                    , linePromptMetadata = maybeCommitSha >>= (\commitSha -> Map.lookup commitSha promptMetadataByCommit)
+                    }
+        Nothing ->
+            diffLine
 
 listRepositoryTree :: User -> Repository -> Text -> Text -> IO [GitTreeEntry]
 listRepositoryTree owner repository branchName currentPath = do
@@ -314,7 +407,7 @@ readMergeBase owner repository baseBranch compareBranch =
 
 runGit :: Maybe FilePath -> [String] -> IO Text
 runGit workingDirectory args = do
-    let command = (proc "git" args) {cwd = workingDirectory}
+    let command = (proc "git" args){cwd = workingDirectory}
     (exitCode, stdout, stderr) <- readCreateProcessWithExitCode command ""
 
     case exitCode of
@@ -324,7 +417,7 @@ runGit workingDirectory args = do
                 (userError ("git " <> List.intercalate " " args <> " failed: " <> stderr))
 
 runGitHttpBackend :: FilePath -> Text -> GitHttpRequest -> IO (Either Text LazyByteString.ByteString)
-runGitHttpBackend projectRoot pathInfo GitHttpRequest { queryString, requestMethod, contentType, authType, remoteUser, requestBody } = do
+runGitHttpBackend projectRoot pathInfo GitHttpRequest{queryString, requestMethod, contentType, authType, remoteUser, requestBody} = do
     baseEnvironment <- Environment.getEnvironment
     let environment =
             mergeEnvironment
@@ -430,7 +523,7 @@ parseHeader (currentStatus, currentHeaders) headerLine
 parseStatus :: ByteString.ByteString -> HTTP.Status
 parseStatus statusValue =
     case ByteString.Char8.words statusValue of
-        codeText:messageParts ->
+        codeText : messageParts ->
             case readMaybe (cs codeText) of
                 Just code -> HTTP.mkStatus code (ByteString.intercalate " " messageParts)
                 Nothing -> HTTP.status200
@@ -489,7 +582,7 @@ parseObjectType _ = Nothing
 parseCommitContext :: Text -> Maybe GitCommitContext
 parseCommitContext line = do
     (sha, message) <- splitTreeLine line
-    pure GitCommitContext { commitSha = sha, commitMessage = message }
+    pure GitCommitContext{commitSha = sha, commitMessage = message}
 
 parsePullRequestCommit :: Text -> Maybe GitPullRequestCommit
 parsePullRequestCommit rawLine =
@@ -566,9 +659,9 @@ parsePullRequestDiffLine state rawLine
                 , currentHunk = Nothing
                 }
     | "--- " `Text.isPrefixOf` rawLine =
-        updateCurrentFile (\file -> file { fileOldPath = parsePatchPath (Text.drop 4 rawLine) }) state
+        updateCurrentFile (\file -> file{fileOldPath = parsePatchPath (Text.drop 4 rawLine)}) state
     | "+++ " `Text.isPrefixOf` rawLine =
-        updateCurrentFile (\file -> file { fileNewPath = parsePatchPath (Text.drop 4 rawLine) }) state
+        updateCurrentFile (\file -> file{fileNewPath = parsePatchPath (Text.drop 4 rawLine)}) state
     | "@@" `Text.isPrefixOf` rawLine =
         case parseDiffHunkHeader rawLine of
             Just hunk ->
@@ -583,7 +676,7 @@ parsePullRequestDiffLine state rawLine
         case currentHunk state of
             Just hunk ->
                 case appendDiffLine rawLine hunk of
-                    Just updatedHunk -> state { currentHunk = Just updatedHunk }
+                    Just updatedHunk -> state{currentHunk = Just updatedHunk}
                     Nothing -> state
             Nothing ->
                 state
@@ -608,7 +701,7 @@ finalizeCurrentHunk state =
     case (currentFile state, currentHunk state) of
         (Just file, Just hunk) ->
             state
-                { currentFile = Just file { fileHunks = buildDiffHunk hunk : fileHunks file }
+                { currentFile = Just file{fileHunks = buildDiffHunk hunk : fileHunks file}
                 , currentHunk = Nothing
                 }
         _ ->
@@ -618,12 +711,12 @@ updateCurrentFile :: (DiffFileBuilder -> DiffFileBuilder) -> DiffParseState -> D
 updateCurrentFile transform state =
     case currentFile state of
         Just file ->
-            state { currentFile = Just (transform file) }
+            state{currentFile = Just (transform file)}
         Nothing ->
             state
 
 buildDiffFile :: DiffFileBuilder -> GitDiffFile
-buildDiffFile DiffFileBuilder { fileOldPath, fileNewPath, fileHunks } =
+buildDiffFile DiffFileBuilder{fileOldPath, fileNewPath, fileHunks} =
     GitDiffFile
         { oldPath = fileOldPath
         , newPath = fileNewPath
@@ -631,7 +724,7 @@ buildDiffFile DiffFileBuilder { fileOldPath, fileNewPath, fileHunks } =
         }
 
 buildDiffHunk :: DiffHunkBuilder -> GitDiffHunk
-buildDiffHunk DiffHunkBuilder { hunkHeader, hunkOldStartLine, hunkOldLineCount, hunkNewStartLine, hunkNewLineCount, hunkLines } =
+buildDiffHunk DiffHunkBuilder{hunkHeader, hunkOldStartLine, hunkOldLineCount, hunkNewStartLine, hunkNewLineCount, hunkLines} =
     GitDiffHunk
         { header = hunkHeader
         , oldStartLine = hunkOldStartLine
@@ -656,6 +749,7 @@ appendDiffLine rawLine hunkBuilder =
                             , oldLineNumber = Just (nextOldLine hunkBuilder)
                             , newLineNumber = Just (nextNewLine hunkBuilder)
                             , lineCommitSha = Nothing
+                            , linePromptMetadata = Nothing
                             }
                             : hunkLines hunkBuilder
                     }
@@ -670,6 +764,7 @@ appendDiffLine rawLine hunkBuilder =
                             , oldLineNumber = Nothing
                             , newLineNumber = Just (nextNewLine hunkBuilder)
                             , lineCommitSha = Nothing
+                            , linePromptMetadata = Nothing
                             }
                             : hunkLines hunkBuilder
                     }
@@ -684,6 +779,7 @@ appendDiffLine rawLine hunkBuilder =
                             , oldLineNumber = Just (nextOldLine hunkBuilder)
                             , newLineNumber = Nothing
                             , lineCommitSha = Nothing
+                            , linePromptMetadata = Nothing
                             }
                             : hunkLines hunkBuilder
                     }
@@ -695,7 +791,7 @@ parseDiffHunkHeader rawHeader =
     case Text.words rawHeader of
         ["@@", oldRange, newRange, "@@"] ->
             buildDiffHunkHeader rawHeader oldRange newRange
-        "@@":oldRange:newRange:"@@":_ ->
+        "@@" : oldRange : newRange : "@@" : _ ->
             buildDiffHunkHeader rawHeader oldRange newRange
         _ ->
             Nothing
@@ -737,6 +833,32 @@ parsePatchPath rawPath
 
 parseIntText :: Text -> Maybe Int
 parseIntText = readMaybe . cs
+
+parseBlamePorcelain :: Text -> [GitBlameLine]
+parseBlamePorcelain output =
+    output
+        |> Text.lines
+        |> mapMaybe parseBlameHeader
+
+parseBlameHeader :: Text -> Maybe GitBlameLine
+parseBlameHeader line =
+    case Text.words line of
+        commitSha : _originalLineNumber : finalLineNumber : _
+            | isBlameCommitHash commitSha -> do
+                blameLineNumber <- readMaybe (Text.unpack finalLineNumber)
+                pure GitBlameLine{blameCommitSha = normalizeBlameCommitSha commitSha, blameLineNumber}
+        _ ->
+            Nothing
+
+isBlameCommitHash :: Text -> Bool
+isBlameCommitHash value =
+    let normalizedValue = normalizeBlameCommitSha value
+     in Text.length normalizedValue >= 8
+            && Text.all isHexDigit normalizedValue
+
+normalizeBlameCommitSha :: Text -> Text
+normalizeBlameCommitSha value =
+    fromMaybe value (Text.stripPrefix "^" value)
 
 joinTreePath :: Text -> Text -> Text
 joinTreePath currentPath entryName =
