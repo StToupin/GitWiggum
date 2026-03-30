@@ -1,12 +1,11 @@
 module Web.Types where
 
-import IHP.Prelude
+import Generated.Types
 import IHP.LoginSupport.Types (CurrentUserRecord, HasNewSessionUrl (..))
 import IHP.ModelSupport
-import Generated.Types
+import IHP.Prelude
 
 data WebApplication = WebApplication deriving (Eq, Show)
-
 
 data StaticController
     = HomeAction
@@ -18,7 +17,7 @@ data RegistrationsController
     deriving (Eq, Show, Data)
 
 data ConfirmationsController
-    = ConfirmUserAction { userId :: !(Id User), confirmationToken :: !Text }
+    = ConfirmUserAction {userId :: !(Id User), confirmationToken :: !Text}
     deriving (Eq, Show, Data)
 
 data SessionsController
@@ -30,8 +29,8 @@ data SessionsController
 data PasswordResetsController
     = NewPasswordResetAction
     | CreatePasswordResetAction
-    | EditPasswordResetAction { userId :: !(Id User), passwordResetToken :: !Text }
-    | UpdatePasswordResetAction { userId :: !(Id User), passwordResetToken :: !Text }
+    | EditPasswordResetAction {userId :: !(Id User), passwordResetToken :: !Text}
+    | UpdatePasswordResetAction {userId :: !(Id User), passwordResetToken :: !Text}
     deriving (Eq, Show, Data)
 
 data DashboardController
@@ -44,25 +43,26 @@ data AccountSettingsController
     deriving (Eq, Show, Data)
 
 data GitHttpController
-    = RepositoryGitHttpAction { ownerSlug :: !Text, repositoryName :: !Text, gitPathInfo :: !Text }
+    = RepositoryGitHttpAction {ownerSlug :: !Text, repositoryName :: !Text, gitPathInfo :: !Text}
     deriving (Eq, Show, Data)
 
 data PullRequestsController
-    = NewPullRequestAction { ownerSlug :: !Text, repositoryName :: !Text }
-    | CreatePullRequestAction { ownerSlug :: !Text, repositoryName :: !Text }
-    | ShowPullRequestConversationAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
-    | ShowPullRequestCommitsAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
-    | ShowPullRequestFilesAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
-    | CreatePullRequestDiffAiJobAction { ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int }
+    = NewPullRequestAction {ownerSlug :: !Text, repositoryName :: !Text}
+    | CreatePullRequestAction {ownerSlug :: !Text, repositoryName :: !Text}
+    | ShowPullRequestConversationAction {ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int}
+    | ShowPullRequestCommitsAction {ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int}
+    | ShowPullRequestFilesAction {ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int}
+    | CreatePullRequestReviewCommentAction {ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int}
+    | CreatePullRequestDiffAiJobAction {ownerSlug :: !Text, repositoryName :: !Text, pullRequestNumber :: !Int}
     deriving (Eq, Show, Data)
 
 data RepositoriesController
     = NewRepositoryAction
     | CreateRepositoryAction
-    | ShowRepositoryAction { ownerSlug :: !Text, repositoryName :: !Text }
-    | RepositoryTreeAction { ownerSlug :: !Text, repositoryName :: !Text, branchName :: !Text, treePath :: !Text }
-    | RepositoryPullRequestsAction { ownerSlug :: !Text, repositoryName :: !Text }
-    | RepositoryAgentsAction { ownerSlug :: !Text, repositoryName :: !Text }
+    | ShowRepositoryAction {ownerSlug :: !Text, repositoryName :: !Text}
+    | RepositoryTreeAction {ownerSlug :: !Text, repositoryName :: !Text, branchName :: !Text, treePath :: !Text}
+    | RepositoryPullRequestsAction {ownerSlug :: !Text, repositoryName :: !Text}
+    | RepositoryAgentsAction {ownerSlug :: !Text, repositoryName :: !Text}
     deriving (Eq, Show, Data)
 
 type instance CurrentUserRecord = User

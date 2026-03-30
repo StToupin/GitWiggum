@@ -141,7 +141,7 @@ test('create pull request from a pushed branch lands on a stable canonical route
   await expect(page.getByRole('heading', { name: '#1 Add docs branch' })).toBeVisible();
   await expect(page.getByText('main <- feature-docs')).toBeVisible();
   await expect(page.getByText('Draft')).toBeVisible();
-  await expect(page.getByText(`/${username}/${repositoryName}/pull-requests/1/conversation`)).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Conversation' })).toHaveClass(/btn-dark/);
 
   await page.goto(`/${username}/${repositoryName}/pull-requests`);
   await expect(page.getByRole('link', { name: /Add docs branch/i })).toBeVisible();
@@ -286,4 +286,64 @@ test('pull request files tab renders the merge base diff', async ({ page }) => {
   await expect(page.getByText('src/feature.txt')).toBeVisible();
   await expect(page.getByText('+feature-only line')).toBeVisible();
   await expect(page.getByText('README.md', { exact: true })).not.toBeVisible();
+});
+
+test('reviewers can add inline comments to pull request diff lines', async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const authorEmail = `repo-pr-review-author-${suffix}@example.com`;
+  const authorUsername = `repo-pr-review-author-${suffix}`;
+  const reviewerEmail = `repo-pr-reviewer-${suffix}@example.com`;
+  const reviewerUsername = `repo-pr-reviewer-${suffix}`;
+  const repositoryName = `pr-review-${suffix}`;
+  const compareBranch = 'feature-review-comments';
+  const reviewBody = 'Please add a bit more detail here for reviewers.';
+
+  await signUpConfirmAndSignIn(page, { email: authorEmail, username: authorUsername, password: 'secret123' });
+  await createRepository(page, {
+    repositoryName,
+    description: 'Pull request review comment smoke test',
+    visibility: 'public',
+  });
+  await expect.poll(() => fs.existsSync(repositoryBarePath(authorUsername, repositoryName))).toBe(true);
+
+  seedRepositoryBranch({
+    ownerSlug: authorUsername,
+    repositoryName,
+    branch: compareBranch,
+    files: {
+      'src/feature.txt': 'feature-only line\n',
+    },
+    commitMessage: 'Seed reviewable diff',
+  });
+
+  await page.goto(`/${authorUsername}/${repositoryName}/pull-requests/new`);
+  await page.getByLabel('Title').fill('Add reviewable diff');
+  await page.getByLabel('Compare branch').selectOption(compareBranch);
+  await page.getByRole('button', { name: 'Create pull request' }).click();
+  await expect(page).toHaveURL(new RegExp(`/${authorUsername}/${repositoryName}/pull-requests/1/conversation$`));
+
+  await page.getByRole('link', { name: 'Sign out' }).click();
+
+  await signUpConfirmAndSignIn(page, { email: reviewerEmail, username: reviewerUsername, password: 'secret123' });
+  await page.goto(`/${authorUsername}/${repositoryName}/pull-requests/1/files`);
+
+  await expect(page.getByText('+feature-only line')).toBeVisible();
+  await page.locator('[data-posthog-id="pull-request-diff-review-comment-toggle"]').first().click();
+  await page.getByLabel('Add comment').fill(reviewBody);
+  const createCommentResponse = page.waitForResponse(
+    (response) =>
+      response.request().method() === 'POST' &&
+      response.url().endsWith('/review-comments') &&
+      response.status() === 204,
+  );
+  await page.getByRole('button', { name: 'Add comment' }).click();
+  await createCommentResponse;
+
+  await page.goto(`/${authorUsername}/${repositoryName}/pull-requests/1/files`);
+  await expect(page.getByText(reviewBody, { exact: true })).toBeVisible();
+  await expect(page.locator('span.fw-semibold.small').filter({ hasText: reviewerUsername })).toBeVisible();
+
+  await page.getByRole('link', { name: 'Conversation' }).click();
+  await expect(page.getByText(reviewBody, { exact: true })).toBeVisible();
+  await expect(page.getByText('src/feature.txt:1 (new)', { exact: true })).toBeVisible();
 });
