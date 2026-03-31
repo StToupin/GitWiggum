@@ -1,8 +1,9 @@
 module Web.Routes where
+
 import qualified Data.Text as Text
+import Generated.Types
 import IHP.RouterPrelude
 import Text.Read (readMaybe)
-import Generated.Types
 import Web.Types
 
 -- Generator Marker
@@ -15,13 +16,13 @@ instance AutoRoute DashboardController
 
 instance AutoRoute AccountSettingsController where
     customRoutes =
-        (do
+        ( do
             string "/settings/ssh"
             endOfInput
             onlyAllowMethods [GET, HEAD]
             pure AccountSshSettingsAction
         )
-            <|> (do
+            <|> ( do
                     string "/settings/ssh"
                     endOfInput
                     onlyAllowMethods [POST]
@@ -40,9 +41,9 @@ instance AutoRoute GitHttpController where
         repositorySegment <- parseText
         gitPathInfo <- remainingText
         repositoryName <- parseGitHttpRepositorySegment repositorySegment
-        pure RepositoryGitHttpAction { ownerSlug, repositoryName, gitPathInfo }
+        pure RepositoryGitHttpAction{ownerSlug, repositoryName, gitPathInfo}
 
-    customPathTo RepositoryGitHttpAction { ownerSlug, repositoryName, gitPathInfo } =
+    customPathTo RepositoryGitHttpAction{ownerSlug, repositoryName, gitPathInfo} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> ".git" <> gitPathInfo)
 
 instance AutoRoute PullRequestsController where
@@ -52,6 +53,7 @@ instance AutoRoute PullRequestsController where
             <|> showPullRequestConversationRoute
             <|> showPullRequestCommitsRoute
             <|> showPullRequestFilesRoute
+            <|> createPullRequestReviewCommentRoute
             <|> createPullRequestDiffAiJobRoute
       where
         newPullRequestRoute = do
@@ -62,7 +64,7 @@ instance AutoRoute PullRequestsController where
             string "/pull-requests/new"
             endOfInput
             onlyAllowMethods [GET, HEAD]
-            pure NewPullRequestAction { ownerSlug, repositoryName }
+            pure NewPullRequestAction{ownerSlug, repositoryName}
 
         createPullRequestRoute = do
             string "/"
@@ -72,7 +74,7 @@ instance AutoRoute PullRequestsController where
             string "/pull-requests/new"
             endOfInput
             onlyAllowMethods [POST]
-            pure CreatePullRequestAction { ownerSlug, repositoryName }
+            pure CreatePullRequestAction{ownerSlug, repositoryName}
 
         showPullRequestConversationRoute = do
             string "/"
@@ -84,7 +86,7 @@ instance AutoRoute PullRequestsController where
             string "/conversation"
             endOfInput
             onlyAllowMethods [GET, HEAD]
-            pure ShowPullRequestConversationAction { ownerSlug, repositoryName, pullRequestNumber }
+            pure ShowPullRequestConversationAction{ownerSlug, repositoryName, pullRequestNumber}
 
         showPullRequestCommitsRoute = do
             string "/"
@@ -96,7 +98,7 @@ instance AutoRoute PullRequestsController where
             string "/commits"
             endOfInput
             onlyAllowMethods [GET, HEAD]
-            pure ShowPullRequestCommitsAction { ownerSlug, repositoryName, pullRequestNumber }
+            pure ShowPullRequestCommitsAction{ownerSlug, repositoryName, pullRequestNumber}
 
         showPullRequestFilesRoute = do
             string "/"
@@ -108,7 +110,19 @@ instance AutoRoute PullRequestsController where
             string "/files"
             endOfInput
             onlyAllowMethods [GET, HEAD]
-            pure ShowPullRequestFilesAction { ownerSlug, repositoryName, pullRequestNumber }
+            pure ShowPullRequestFilesAction{ownerSlug, repositoryName, pullRequestNumber}
+
+        createPullRequestReviewCommentRoute = do
+            string "/"
+            ownerSlug <- parseText
+            string "/"
+            repositoryName <- parseText
+            string "/pull-requests/"
+            pullRequestNumber <- parseRouteNumber
+            string "/review-comments"
+            endOfInput
+            onlyAllowMethods [POST]
+            pure CreatePullRequestReviewCommentAction{ownerSlug, repositoryName, pullRequestNumber}
 
         createPullRequestDiffAiJobRoute = do
             string "/"
@@ -120,19 +134,21 @@ instance AutoRoute PullRequestsController where
             string "/diff-ai"
             endOfInput
             onlyAllowMethods [POST]
-            pure CreatePullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber }
+            pure CreatePullRequestDiffAiJobAction{ownerSlug, repositoryName, pullRequestNumber}
 
-    customPathTo NewPullRequestAction { ownerSlug, repositoryName } =
+    customPathTo NewPullRequestAction{ownerSlug, repositoryName} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/new")
-    customPathTo CreatePullRequestAction { ownerSlug, repositoryName } =
+    customPathTo CreatePullRequestAction{ownerSlug, repositoryName} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/new")
-    customPathTo ShowPullRequestConversationAction { ownerSlug, repositoryName, pullRequestNumber } =
+    customPathTo ShowPullRequestConversationAction{ownerSlug, repositoryName, pullRequestNumber} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/conversation")
-    customPathTo ShowPullRequestCommitsAction { ownerSlug, repositoryName, pullRequestNumber } =
+    customPathTo ShowPullRequestCommitsAction{ownerSlug, repositoryName, pullRequestNumber} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/commits")
-    customPathTo ShowPullRequestFilesAction { ownerSlug, repositoryName, pullRequestNumber } =
+    customPathTo ShowPullRequestFilesAction{ownerSlug, repositoryName, pullRequestNumber} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/files")
-    customPathTo CreatePullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber } =
+    customPathTo CreatePullRequestReviewCommentAction{ownerSlug, repositoryName, pullRequestNumber} =
+        Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/review-comments")
+    customPathTo CreatePullRequestDiffAiJobAction{ownerSlug, repositoryName, pullRequestNumber} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests/" <> tshow pullRequestNumber <> "/diff-ai")
     customPathTo _ = Nothing
 
@@ -151,7 +167,7 @@ instance AutoRoute RepositoriesController where
             string "/pull-requests"
             endOfInput
             onlyAllowMethods [GET, HEAD]
-            pure RepositoryPullRequestsAction { ownerSlug, repositoryName }
+            pure RepositoryPullRequestsAction{ownerSlug, repositoryName}
 
         repositoryAgentsRoute = do
             string "/"
@@ -161,7 +177,7 @@ instance AutoRoute RepositoriesController where
             string "/agents"
             endOfInput
             onlyAllowMethods [GET, HEAD]
-            pure RepositoryAgentsAction { ownerSlug, repositoryName }
+            pure RepositoryAgentsAction{ownerSlug, repositoryName}
 
         repositoryTreeRoute = do
             string "/"
@@ -171,14 +187,14 @@ instance AutoRoute RepositoriesController where
             string "/tree/"
             branchName <- parseText
             treePath <-
-                (do
+                ( do
                     string "/"
                     remainingText
-                    )
+                )
                     <|> pure ""
             endOfInput
             onlyAllowMethods [GET, HEAD]
-            pure RepositoryTreeAction { ownerSlug, repositoryName, branchName, treePath }
+            pure RepositoryTreeAction{ownerSlug, repositoryName, branchName, treePath}
 
         showRepositoryRoute = do
             string "/"
@@ -187,16 +203,16 @@ instance AutoRoute RepositoriesController where
             repositoryName <- parseText
             endOfInput
             onlyAllowMethods [GET, HEAD]
-            pure ShowRepositoryAction { ownerSlug, repositoryName }
+            pure ShowRepositoryAction{ownerSlug, repositoryName}
 
-    customPathTo ShowRepositoryAction { ownerSlug, repositoryName } =
+    customPathTo ShowRepositoryAction{ownerSlug, repositoryName} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName)
-    customPathTo RepositoryTreeAction { ownerSlug, repositoryName, branchName, treePath } =
+    customPathTo RepositoryTreeAction{ownerSlug, repositoryName, branchName, treePath} =
         Just
             ("/" <> ownerSlug <> "/" <> repositoryName <> "/tree/" <> branchName <> treePathSuffix treePath)
-    customPathTo RepositoryPullRequestsAction { ownerSlug, repositoryName } =
+    customPathTo RepositoryPullRequestsAction{ownerSlug, repositoryName} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/pull-requests")
-    customPathTo RepositoryAgentsAction { ownerSlug, repositoryName } =
+    customPathTo RepositoryAgentsAction{ownerSlug, repositoryName} =
         Just ("/" <> ownerSlug <> "/" <> repositoryName <> "/agents")
     customPathTo _ = Nothing
 

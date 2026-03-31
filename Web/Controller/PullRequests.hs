@@ -1,31 +1,32 @@
 module Web.Controller.PullRequests where
 
 import qualified Application.Service.DiffAI as DiffAI
+import Application.Service.GitRepository (listRepositoryBranches)
+import qualified Application.Service.GitRepository as GitRepository
 import qualified Data.List as List
-import qualified Network.HTTP.Types as HTTP
-import qualified Network.Wai as WAI
+import qualified Data.Map.Strict as Map
 import qualified Data.Text as Text
 import IHP.ModelSupport (trackTableRead)
 import IHP.ValidationSupport.Types (attachFailure, getValidationFailure)
 import IHP.ValidationSupport.ValidateField (nonEmpty, validateField)
-import Application.Service.GitRepository (listRepositoryBranches)
-import qualified Application.Service.GitRepository as GitRepository
+import qualified Network.HTTP.Types as HTTP
+import qualified Network.Wai as WAI
 import Web.Controller.Prelude
 import Web.View.PullRequests.Commits
 import Web.View.PullRequests.Conversation
 import Web.View.PullRequests.Files
 import Web.View.PullRequests.New
+import Web.View.PullRequests.ReviewComments
 
 instance Controller PullRequestsController where
     beforeAction = ensureIsUser
 
-    action NewPullRequestAction { ownerSlug, repositoryName } = do
+    action NewPullRequestAction{ownerSlug, repositoryName} = do
         (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
         availableBranches <- liftIO $ listRepositoryBranches owner repository
         let pullRequest = buildInitialPullRequest currentUser repository availableBranches
-        render NewView { owner, repository, pullRequest, availableBranches }
-
-    action CreatePullRequestAction { ownerSlug, repositoryName } = do
+        render NewView{owner, repository, pullRequest, availableBranches}
+    action CreatePullRequestAction{ownerSlug, repositoryName} = do
         (owner, repository) <- fetchRepositoryContext ownerSlug repositoryName
         availableBranches <- liftIO $ listRepositoryBranches owner repository
         nextNumber <- nextPullRequestNumber repository
@@ -48,7 +49,7 @@ instance Controller PullRequestsController where
                     |> validatePullRequestBranches availableBranches
 
         if hasPullRequestErrors pullRequestWithValidation
-            then render NewView { owner, repository, pullRequest = pullRequestWithValidation, availableBranches }
+            then render NewView{owner, repository, pullRequest = pullRequestWithValidation, availableBranches}
             else do
                 createdPullRequest <- pullRequestWithValidation |> createRecord
                 setSuccessMessage "Pull request created."
@@ -58,12 +59,14 @@ instance Controller PullRequestsController where
                         , repositoryName
                         , pullRequestNumber = get #number createdPullRequest
                         }
-
-    action ShowPullRequestConversationAction { ownerSlug, repositoryName, pullRequestNumber } = do
-        (owner, repository, pullRequest, author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
-        render ConversationView { owner, repository, pullRequest, author }
-
-    action ShowPullRequestCommitsAction { ownerSlug, repositoryName, pullRequestNumber } = do
+    action ShowPullRequestConversationAction{ownerSlug, repositoryName, pullRequestNumber} = do
+        autoRefresh do
+            (owner, repository, pullRequest, author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
+            headSha <- liftIO $ GitRepository.readPullRequestHeadSha owner repository (get #compareBranch pullRequest)
+            trackTableRead "pull_request_review_comments"
+            reviewComments <- fetchPullRequestReviewCommentDisplays pullRequest headSha
+            render ConversationView{owner, repository, pullRequest, author, reviewComments}
+    action ShowPullRequestCommitsAction{ownerSlug, repositoryName, pullRequestNumber} = do
         (owner, repository, pullRequest, author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
         commits <-
             liftIO $
@@ -72,9 +75,8 @@ instance Controller PullRequestsController where
                     repository
                     (get #baseBranch pullRequest)
                     (get #compareBranch pullRequest)
-        render CommitsView { owner, repository, pullRequest, author, commits }
-
-    action ShowPullRequestFilesAction { ownerSlug, repositoryName, pullRequestNumber } = do
+        render CommitsView{owner, repository, pullRequest, author, commits}
+    action ShowPullRequestFilesAction{ownerSlug, repositoryName, pullRequestNumber} = do
         autoRefresh do
             (owner, repository, pullRequest, author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
             headSha <- liftIO $ GitRepository.readPullRequestHeadSha owner repository (get #compareBranch pullRequest)
@@ -85,15 +87,86 @@ instance Controller PullRequestsController where
                         repository
                         (get #baseBranch pullRequest)
                         (get #compareBranch pullRequest)
+            trackTableRead "pull_request_review_comments"
+            reviewComments <-
+                fmap
+                    (filter (not . reviewCommentIsOutdated))
+                    (fetchPullRequestReviewCommentDisplays pullRequest headSha)
             trackTableRead "diff_ai_response_jobs"
             diffAiJobs <-
                 query @DiffAiResponseJob
                     |> filterWhere (#pullRequestId, get #id pullRequest)
                     |> filterWhere (#dismissed, False)
                     |> fetch
-            render FilesView { owner, repository, pullRequest, author, diffFiles, diffAiJobs, headSha }
+            render FilesView{owner, repository, pullRequest, author, diffFiles, reviewComments, diffAiJobs, headSha}
+    action CreatePullRequestReviewCommentAction{ownerSlug, repositoryName, pullRequestNumber} = do
+        (owner, repository, pullRequest, _author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
 
-    action CreatePullRequestDiffAiJobAction { ownerSlug, repositoryName, pullRequestNumber } = do
+        let commentPath =
+                pathTo
+                    CreatePullRequestReviewCommentAction
+                        { ownerSlug
+                        , repositoryName
+                        , pullRequestNumber
+                        }
+        let maybeFilePath = paramOrNothing @Text "filePath"
+        let maybeSide = paramOrNothing @Text "side"
+        let maybeLineNumber = paramOrNothing @Int "lineNumber"
+        let submittedBody = paramOrDefault "" "body"
+
+        case (maybeFilePath, maybeSide, maybeLineNumber) of
+            (Just filePath, Just side, Just lineNumber) -> do
+                let composer =
+                        ReviewCommentComposer
+                            { reviewCommentLocation =
+                                ReviewCommentLocation
+                                    { reviewCommentFilePath = filePath
+                                    , reviewCommentSide = side
+                                    , reviewCommentLineNumber = lineNumber
+                                    }
+                            , reviewCommentBody = submittedBody
+                            , reviewCommentBodyError = Nothing
+                            }
+
+                if side `notElem` ["old", "new"] || lineNumber <= 0
+                    then
+                        renderFragment
+                            ReviewCommentComposerSlotView
+                                { commentPath
+                                , composer = composer{reviewCommentBodyError = Just "Choose a valid diff line to comment on."}
+                                }
+                    else do
+                        maybeHeadSha <- liftIO $ GitRepository.readPullRequestHeadSha owner repository (get #compareBranch pullRequest)
+                        let normalizedBody = Text.strip submittedBody
+
+                        case maybeHeadSha of
+                            Nothing ->
+                                renderFragment
+                                    ReviewCommentComposerSlotView
+                                        { commentPath
+                                        , composer = composer{reviewCommentBodyError = Just "Could not resolve the current pull request diff."}
+                                        }
+                            Just headSha
+                                | Text.null normalizedBody ->
+                                    renderFragment
+                                        ReviewCommentComposerSlotView
+                                            { commentPath
+                                            , composer = composer{reviewCommentBodyError = Just "Add a comment before submitting."}
+                                            }
+                                | otherwise -> do
+                                    newRecord @PullRequestReviewComment
+                                        |> set #pullRequestId (get #id pullRequest)
+                                        |> set #authorUserId (get #id currentUser)
+                                        |> set #filePath filePath
+                                        |> set #side side
+                                        |> set #lineNumber lineNumber
+                                        |> set #headSha headSha
+                                        |> set #body normalizedBody
+                                        |> createRecord
+                                    respondAndExitWithHeaders (WAI.responseLBS HTTP.status204 [] "")
+            _ ->
+                respondAndExitWithHeaders (WAI.responseLBS HTTP.status422 [] "Missing review comment location")
+    action CreatePullRequestDiffAiJobAction{ownerSlug, repositoryName, pullRequestNumber} = do
         (owner, repository, pullRequest, _author) <- fetchPullRequestContext ownerSlug repositoryName pullRequestNumber
 
         let maybeFilePath = paramOrNothing @Text "filePath"
@@ -107,11 +180,12 @@ instance Controller PullRequestsController where
 
                     case maybeHeadSha of
                         Just headSha -> do
-                            let location = DiffAI.DiffAiLocation { filePath, side, lineNumber }
+                            let location = DiffAI.DiffAiLocation{filePath, side, lineNumber}
                             diffAiResponseJob <- DiffAI.enqueueOrReuseDiffAiResponseJob pullRequest headSha location
                             renderFragment
                                 DiffAiResponseRowView
-                                    { diffAiResponseJob }
+                                    { diffAiResponseJob
+                                    }
                         Nothing ->
                             respondAndExitWithHeaders (WAI.responseLBS HTTP.status422 [] "Could not resolve pull request head SHA")
             _ ->
@@ -236,3 +310,54 @@ fetchPullRequestContext ownerSlug repositoryName pullRequestNumber = do
             |> fetchOne
 
     pure (owner, repository, pullRequest, author)
+
+fetchPullRequestReviewCommentDisplays ::
+    (?modelContext :: ModelContext) =>
+    PullRequest ->
+    Maybe Text ->
+    IO [PullRequestReviewCommentDisplay]
+fetchPullRequestReviewCommentDisplays pullRequest maybeCurrentHeadSha = do
+    reviewComments <-
+        query @PullRequestReviewComment
+            |> filterWhere (#pullRequestId, get #id pullRequest)
+            |> orderByAsc #createdAt
+            |> fetch
+
+    authorsById <-
+        fmap
+            Map.fromList
+            ( reviewComments
+                |> map (get #authorUserId)
+                |> List.nub
+                |> mapM fetchReviewCommentAuthor
+            )
+
+    pure $
+        reviewComments
+            |> mapMaybe
+                ( \pullRequestReviewComment -> do
+                    reviewCommentAuthor <- Map.lookup (get #authorUserId pullRequestReviewComment) authorsById
+
+                    Just
+                        PullRequestReviewCommentDisplay
+                            { pullRequestReviewComment
+                            , reviewCommentAuthor
+                            , reviewCommentIsOutdated =
+                                maybe
+                                    False
+                                    (/= get #headSha pullRequestReviewComment)
+                                    maybeCurrentHeadSha
+                            }
+                )
+
+fetchReviewCommentAuthor ::
+    (?modelContext :: ModelContext) =>
+    Id User ->
+    IO (Id User, User)
+fetchReviewCommentAuthor authorUserId = do
+    reviewCommentAuthor <-
+        query @User
+            |> filterWhere (#id, authorUserId)
+            |> fetchOne
+
+    pure (authorUserId, reviewCommentAuthor)
